@@ -68,9 +68,9 @@ permissions:
 jobs:
   review:
     runs-on: ubuntu-latest
-    # The bound fits a typical run of 20 chunks at up to two model calls each.
-    # A run where every call reaches the 600-second limit exceeds it and ends
-    # without a verdict.
+    # A worst case of 20 chunks at two 600-second calls each exceeds any job
+    # bound. The model review step stops at 40 minutes. The remaining time lets
+    # the publish step post a blocking check run without a verdict.
     timeout-minutes: 45
     concurrency:
       group: quality-review-${{ github.repository }}-${{ inputs.pr_number }}
@@ -115,6 +115,7 @@ jobs:
           --out-dir "$RUNNER_TEMP/review"
 
       - name: Run model review
+        timeout-minutes: 40
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
         run: >-
@@ -141,24 +142,47 @@ jobs:
               await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
 
+      # A failed or timed-out review still publishes a blocking check run, so
+      # the gate never goes missing. A run cancelled for a newer head stays
+      # quiet.
       - name: Publish quality-review check run
+        if: ${{ !cancelled() }}
+        timeout-minutes: 2
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           HEAD_SHA: ${{ inputs.head_sha }}
           FAIL_ON_BLOCK: ${{ inputs.fail_on_block }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
             const fs = require('fs');
-            const result = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/review/result.json`, 'utf8'));
-            const blocking = ['BLOCK', 'NEEDS-HUMAN'].includes(result.verdict);
-            const conclusion = blocking ? (process.env.FAIL_ON_BLOCK === 'true' ? 'failure' : 'neutral') : 'success';
+            let result = null;
+            try {
+              result = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/review/result.json`, 'utf8'));
+            } catch (error) {
+              core.warning(`quality review result unavailable: ${error.message}`);
+            }
+            const blockingConclusion = process.env.FAIL_ON_BLOCK === 'true' ? 'failure' : 'neutral';
+            let conclusion;
+            let output;
+            if (result && typeof result.verdict === 'string') {
+              const blocking = ['BLOCK', 'NEEDS-HUMAN'].includes(result.verdict);
+              conclusion = blocking ? blockingConclusion : 'success';
+              output = { title: `Euler quality review: ${result.verdict}`, summary: `Verdict ${result.verdict}.` };
+            } else {
+              conclusion = blockingConclusion;
+              output = {
+                title: 'Euler quality review: no verdict',
+                summary: `The review ended before a verdict. Workflow run: ${process.env.RUN_URL}`,
+              };
+            }
             await github.rest.checks.create({
               ...context.repo,
               name: 'quality-review',
               head_sha: process.env.HEAD_SHA,
               status: 'completed',
               conclusion,
-              output: { title: `Euler quality review: ${result.verdict}`, summary: `Verdict ${result.verdict}.` },
+              output,
             });
 
       - name: Gate on verdict

@@ -17,9 +17,9 @@ a report with a machine-readable verdict. The check fails on `BLOCK` or
    no secret.
 6. The reusable workflow allows one active review per pull request. A newer
    head cancels an obsolete run. The `review` job stops after 45 minutes. The
-   `max_chunks` input caps the envelopes at 20 by default. The bound fits a
-   typical run. A run where every model call reaches its 600-second limit
-   ends at the timeout without a verdict.
+   `max_chunks` input caps the envelopes at 20 by default. The model review
+   step stops after 40 minutes. A run that ends without a verdict publishes a
+   blocking `quality-review` check run.
 7. The workflow checks out the base revision with full history. The head
    commit stays in the object store without a checkout.
 8. The workflow checks out `abuzucom/euler` at `quality_ref` into `.euler`.

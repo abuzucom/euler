@@ -54,6 +54,9 @@ loading `QUALITY.md` into a deployment.
   cancelling the review in progress.
 - Documented the shared model key risk and the manual settings steps in
   `docs/pr-security-review.md`.
+- A quality review that fails or times out before a verdict publishes a
+  blocking `quality-review` check run. The model review step stops after 40
+  minutes.
 - `docs/pr-security-review.md` states that a later spoofed check run with the
   same name overrides the real result. The workflow review ruleset closes the
   override. Requiring the GitHub Actions app does not.
