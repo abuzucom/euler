@@ -148,6 +148,11 @@ class RunReviewTest(unittest.TestCase):
         self.assertFalse([line for line in outside if "![p]" in line or "@user" in line])
         self.assertIn("![p]", text)
 
+    def test_fenced_list_keeps_spaces_and_drops_line_breaks(self) -> None:
+        text = run_review.fenced_list(["src/two  spaces.py", "line\nbreak\r\x1bx"])
+        self.assertIn("src/two  spaces.py", text)
+        self.assertEqual(text.count("\n"), 3)
+
     def test_report_caps_long_lists(self) -> None:
         unreviewed = [f"file{index}.bin" for index in range(run_review.MAX_LISTED_ITEMS + 5)]
         self.write_review([["app.py"]], unreviewed=unreviewed)

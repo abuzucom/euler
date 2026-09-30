@@ -22,7 +22,7 @@ loading `QUALITY.md` into a deployment.
   Files in chunks past the limit become unreviewed files.
 - `ci/run_review.py` fences the blocking prescan list, the unreviewed list,
   and the validation problems in the PR comment. Each list shows at most 50
-  items of at most 300 characters.
+  items of at most 300 characters. Control characters in an item become `?`.
 - `ci/call_model.py` writes the provider error body to the job log only. The
   `ModelCallError` message keeps the HTTP status.
 - The checkers skip a Python or TOML file that raises `RecursionError` or
