@@ -100,14 +100,16 @@ jobs:
             );
             // A pull request can add its own workflow that creates a check run
             // with this name and a fake verdict. Count a check run only when
-            // its details_url names a run of this workflow file on the default
+            // its summary names a run of this workflow file on the default
             // branch, and that run holds the marker artifact for this head. A
-            // details_url copied from a review of another head has no such
-            // artifact. A failed lookup counts as not reviewed.
+            // run URL copied from a review of another head has no such
+            // artifact. A failed lookup counts as not reviewed. GitHub replaces
+            // the details_url of a check run created with the job token, so
+            // the summary carries the run URL.
             const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             const runUrlPattern = new RegExp(
-              `^https://github\\.com/${escapeRegExp(baseRepository)}/actions/runs/(\\d+)(?:/job/\\d+)?$`,
-              "i",
+              `^Workflow run: https://github\\.com/${escapeRegExp(baseRepository)}/actions/runs/(\\d+)$`,
+              "im",
             );
             const isGenuineReview = async (checkRun) => {
               if (
@@ -116,7 +118,7 @@ jobs:
               ) {
                 return false;
               }
-              const match = runUrlPattern.exec(checkRun.details_url || "");
+              const match = runUrlPattern.exec(checkRun.output?.summary || "");
               if (!match) {
                 return false;
               }
@@ -547,7 +549,8 @@ jobs:
               details_url: process.env.RUN_URL,
               output: {
                 title: `security-review: ${conclusion}`,
-                summary: `Head ${shortHeadSha}: model review result: \`${verdictLine}\``,
+                summary: `Head ${shortHeadSha}: model review result: \`${verdictLine}\`\n` +
+                  `Workflow run: ${process.env.RUN_URL}`,
               },
             };
             let lastError = null;

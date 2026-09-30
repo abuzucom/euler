@@ -53,7 +53,9 @@ Any workflow with `checks: write` can create a check run named
 conditions hold:
 
 - The summary carries a `VERDICT:` token.
-- The `details_url` names a run in this repository.
+- The summary names a run in this repository on a `Workflow run:` line.
+  GitHub replaces the `details_url` of a check run created with the job
+  token.
 - That run comes from `.github/workflows/security-review-pr.yml` on the
   default branch through the `workflow_run` event.
 - That run holds the marker artifact for the current head SHA.

@@ -29,7 +29,7 @@ loading `QUALITY.md` into a deployment.
   `MemoryError` with a warning. The PR builder lists such a file as
   unreviewed.
 - `security-review-pr.yml` trusts a `security-review` check run for dedupe
-  only when its `details_url` names a default-branch run of this workflow
+  only when its summary names a default-branch run of this workflow
   holding a `security-review-head-<sha>` marker artifact. `resolve-pr` gains
   `actions: read`.
 - `security-review-pr.yml` reads the verdict token with `read -r` in place of
