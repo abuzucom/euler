@@ -216,6 +216,27 @@ class BuildTest(GitRepoCase):
             expected = self.git_raw("diff", "--no-color", "--no-renames", base, head, "--", path)
             self.assertEqual(patch, expected, path)
 
+    def test_parse_combined_diff_rejects_truncated_records(self) -> None:
+        self.assertIsNone(build_pr_case.parse_combined_diff(b":100644 100644 a b M\0trunc"))
+
+    def test_parse_combined_diff_rejects_count_mismatch(self) -> None:
+        output = b":100644 100644 a b M\0one.py\0:100644 100644 c d M\0two.py\0\0diff --git a/one.py b/one.py\n"
+        self.assertIsNone(build_pr_case.parse_combined_diff(output))
+
+    def test_parse_combined_diff_splits_well_formed_output(self) -> None:
+        output = (
+            b":100644 100644 a b M\0one.py\0:100644 100644 c d M\0two.py\0\0"
+            b"diff --git a/one.py b/one.py\n+x\ndiff --git a/two.py b/two.py\n+y\n"
+        )
+        parsed = build_pr_case.parse_combined_diff(output)
+        self.assertEqual(
+            parsed,
+            (
+                [b"one.py", b"two.py"],
+                [b"diff --git a/one.py b/one.py\n+x\n", b"diff --git a/two.py b/two.py\n+y\n"],
+            ),
+        )
+
     def test_deep_python_with_requirements_listed_unreviewed(self) -> None:
         base = self.commit({"requirements.txt": "requests==2.32.3\n"})
         head = self.commit({"deep.py": DEEP_PYTHON})
