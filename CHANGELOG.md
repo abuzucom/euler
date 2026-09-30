@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.2.0] (2026-09-30)
+
+### Added
+
+- Added `.github/workflows/security-review-pr.yml`. The workflow runs the
+  `abuzucom/foucault` v3.3.14 security review on pull requests from a pinned
+  checkout.
+- Added `docs/pr-security-review.md`.
+- Recorded the foucault pin in `adopters/README.md` and `README.md`.
+
 ## [0.1.0] (2026-09-30)
 
 ### Added

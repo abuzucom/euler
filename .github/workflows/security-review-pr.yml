@@ -1,0 +1,505 @@
+name: security-review-pr
+
+# Runs the abuzucom/foucault PR security review on this repository's pull
+# requests. The steps mirror foucault's security-review-pr.yml caller and its
+# reusable security-review.yml job at the pinned revision. The adapter runs
+# from the pinned .foucault checkout because this repository's own ci/ holds
+# the euler quality adapter at the paths the reusable workflow expects.
+#
+# workflow_run keeps this workflow on default-branch code. A pull request
+# cannot edit the reviewer. Fork pull requests receive no secret.
+#
+# Upgrade: set FOUCAULT_REF to a new full commit SHA, update the version
+# comment, and diff this file against the new upstream workflows.
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+concurrency:
+  group: security-review-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: true
+
+permissions:
+  checks: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  resolve-pr:
+    runs-on: ubuntu-latest
+    outputs:
+      same_repository: ${{ steps.resolve.outputs.same_repository }}
+      already_reviewed: ${{ steps.resolve.outputs.already_reviewed }}
+      pr_number: ${{ steps.resolve.outputs.pr_number }}
+      base_sha: ${{ steps.resolve.outputs.base_sha }}
+      head_sha: ${{ steps.resolve.outputs.head_sha }}
+      head_repo_url: ${{ steps.resolve.outputs.head_repo_url }}
+      head_repo_full_name: ${{ steps.resolve.outputs.head_repo_full_name }}
+    steps:
+      - name: Resolve pull request from workflow run head
+        id: resolve
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const workflowRun = context.payload.workflow_run;
+            const headSha = workflowRun?.head_sha;
+            if (!/^[0-9a-f]{40}$/.test(headSha || "")) {
+              core.setFailed("workflow run head SHA is invalid");
+              return;
+            }
+
+            const pullRequests = await github.paginate(
+              github.rest.repos.listPullRequestsAssociatedWithCommit,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: headSha,
+                per_page: 100,
+              },
+            );
+            const baseRepository = `${context.repo.owner}/${context.repo.repo}`;
+            const candidates = pullRequests.filter((pullRequest) =>
+              pullRequest.base?.repo?.full_name?.toLowerCase() ===
+              baseRepository.toLowerCase() &&
+              pullRequest.head?.sha?.toLowerCase() === headSha.toLowerCase()
+            );
+            if (candidates.length !== 1) {
+              core.setFailed(
+                `expected one pull request for workflow run head, found ${candidates.length}`,
+              );
+              return;
+            }
+
+            const pullRequest = candidates[0];
+            const headRepository = pullRequest.head?.repo;
+            if (!headRepository?.full_name || !headRepository.clone_url) {
+              core.setFailed("pull request head repository metadata is unavailable");
+              return;
+            }
+
+            // One model call per head revision. A completed check run carrying
+            // a verdict means this head was already reviewed. A failed run
+            // carries no verdict, so a flaky review still retries.
+            const checkRuns = await github.paginate(
+              github.rest.checks.listForRef,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: headSha,
+                check_name: "security-review",
+                per_page: 100,
+              },
+            );
+            const alreadyReviewed = checkRuns.some((run) =>
+              run.status === "completed" &&
+              /VERDICT: (APPROVE|BLOCK|NEEDS-HUMAN)\b/.test(
+                run.output?.summary || ""
+              )
+            );
+            core.setOutput("already_reviewed", alreadyReviewed ? "true" : "false");
+            core.setOutput(
+              "same_repository",
+              headRepository.full_name.toLowerCase() === baseRepository.toLowerCase()
+                ? "true"
+                : "false",
+            );
+            core.setOutput("pr_number", String(pullRequest.number));
+            core.setOutput("base_sha", pullRequest.base.sha);
+            core.setOutput("head_sha", pullRequest.head.sha);
+            core.setOutput("head_repo_url", headRepository.clone_url);
+            core.setOutput("head_repo_full_name", headRepository.full_name);
+
+  review:
+    needs: resolve-pr
+    if: needs.resolve-pr.result == 'success' && needs.resolve-pr.outputs.same_repository == 'true' && needs.resolve-pr.outputs.already_reviewed != 'true'
+    runs-on: ubuntu-latest
+    env:
+      # Foucault v3.3.14.
+      FOUCAULT_REF: "06d74fba4d9013654cdaf9896bb7535724385186"
+    steps:
+      - name: Resolve pull request metadata
+        id: resolve
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        env:
+          INPUT_PR_NUMBER: ${{ needs.resolve-pr.outputs.pr_number }}
+          INPUT_BASE_SHA: ${{ needs.resolve-pr.outputs.base_sha }}
+          INPUT_HEAD_SHA: ${{ needs.resolve-pr.outputs.head_sha }}
+          INPUT_HEAD_REPO_URL: ${{ needs.resolve-pr.outputs.head_repo_url }}
+          INPUT_HEAD_REPO_FULL_NAME: ${{ needs.resolve-pr.outputs.head_repo_full_name }}
+        with:
+          script: |
+            const shaPattern = /^[0-9a-f]{40}$/;
+            const repositoryPattern = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+            const inputValues = [
+              process.env.INPUT_PR_NUMBER,
+              process.env.INPUT_BASE_SHA,
+              process.env.INPUT_HEAD_SHA,
+              process.env.INPUT_HEAD_REPO_URL,
+              process.env.INPUT_HEAD_REPO_FULL_NAME,
+            ];
+
+            const emitMetadata = (number, baseSha, headSha, repoUrl, repoName) => {
+              if (!/^[1-9][0-9]*$/.test(String(number))) {
+                throw new Error("pull request number is invalid");
+              }
+              if (!shaPattern.test(baseSha) || !shaPattern.test(headSha)) {
+                throw new Error("pull request revisions are invalid");
+              }
+              if (!repositoryPattern.test(repoName)) {
+                throw new Error("pull request repository is invalid");
+              }
+              if (!repoUrl || !repoUrl.startsWith("https://github.com/")) {
+                throw new Error("pull request repository URL is invalid");
+              }
+              core.setOutput("pr_number", String(number));
+              core.setOutput("base_sha", baseSha);
+              core.setOutput("head_sha", headSha);
+              core.setOutput("head_repo_url", repoUrl);
+              core.setOutput("head_repo_full_name", repoName);
+            };
+
+            try {
+              if (inputValues.some((value) => value)) {
+                if (inputValues.some((value) => !value)) {
+                  throw new Error("resolved pull request metadata is incomplete");
+                }
+                emitMetadata(
+                  process.env.INPUT_PR_NUMBER,
+                  process.env.INPUT_BASE_SHA,
+                  process.env.INPUT_HEAD_SHA,
+                  process.env.INPUT_HEAD_REPO_URL,
+                  process.env.INPUT_HEAD_REPO_FULL_NAME,
+                );
+                return;
+              }
+
+              const directPullRequest = context.payload.pull_request;
+              if (directPullRequest) {
+                emitMetadata(
+                  directPullRequest.number,
+                  directPullRequest.base?.sha,
+                  directPullRequest.head?.sha,
+                  directPullRequest.head?.repo?.clone_url,
+                  directPullRequest.head?.repo?.full_name,
+                );
+                return;
+              }
+
+              const headSha = context.payload.workflow_run?.head_sha;
+              if (!shaPattern.test(headSha || "")) {
+                throw new Error("workflow run head SHA is invalid");
+              }
+              const pullRequests = await github.paginate(
+                github.rest.repos.listPullRequestsAssociatedWithCommit,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  commit_sha: headSha,
+                  per_page: 100,
+                },
+              );
+              const baseRepository = `${context.repo.owner}/${context.repo.repo}`;
+              const candidates = pullRequests.filter((pullRequest) =>
+                pullRequest.base?.repo?.full_name?.toLowerCase() ===
+                baseRepository.toLowerCase() &&
+                pullRequest.head?.sha?.toLowerCase() === headSha.toLowerCase()
+              );
+              if (candidates.length !== 1) {
+                throw new Error(
+                  `expected one pull request for workflow run head, found ${candidates.length}`,
+                );
+              }
+              const pullRequest = candidates[0];
+              emitMetadata(
+                pullRequest.number,
+                pullRequest.base?.sha,
+                pullRequest.head?.sha,
+                pullRequest.head?.repo?.clone_url,
+                pullRequest.head?.repo?.full_name,
+              );
+            } catch (error) {
+              core.setFailed(error.message);
+            }
+
+      - name: Checkout pull request
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ steps.resolve.outputs.base_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout AUDIT.md
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: abuzucom/foucault
+          ref: ${{ env.FOUCAULT_REF }}
+          path: .foucault
+          persist-credentials: false
+
+      - name: Fetch pull request head object
+        env:
+          PR_HEAD_REPO_URL: ${{ steps.resolve.outputs.head_repo_url }}
+          HEAD_REPO_FULL_NAME: ${{ steps.resolve.outputs.head_repo_full_name }}
+          BASE_REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          python3 - "$PR_HEAD_REPO_URL" "$HEAD_REPO_FULL_NAME" "$BASE_REPOSITORY" "$HEAD_SHA" <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+          from urllib.parse import urlsplit
+
+          repository_url, head_repository, base_repository, head_sha = sys.argv[1:]
+          parsed = urlsplit(repository_url)
+          if parsed.scheme != "https" or parsed.hostname != "github.com":
+              raise SystemExit("PR head repository URL is not an approved GitHub URL")
+          if (
+              parsed.query
+              or parsed.fragment
+              or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", head_repository)
+              or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", base_repository)
+              or not re.fullmatch(r"[0-9a-f]{40}", head_sha)
+          ):
+              raise SystemExit("PR head metadata is invalid")
+          fetch_source = (
+              "origin"
+              if head_repository.casefold() == base_repository.casefold()
+              else repository_url
+          )
+          subprocess.run(
+              ["git", "fetch", "--no-tags", "--depth=1", fetch_source, head_sha],
+              check=True,
+          )
+          PY
+
+      - name: Build provenance-labeled case text
+        env:
+          EVENT_PATH: ${{ github.event_path }}
+          BASE_SHA: ${{ steps.resolve.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
+          PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
+          PR_REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .foucault/ci/build_pr_case.py
+
+      - name: Run model call
+        id: model
+        env:
+          AUDIT_PROMPT_FILE: .foucault/AUDIT.md
+          CASE_TEXT_FILE: case_text.txt
+          # Resolved against the .foucault checkout by run_model_command.py.
+          MODEL_CALL_COMMAND: python3 ci/call_model.py
+          MODEL_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          set -euo pipefail
+          python3 .foucault/ci/run_model_command.py "$MODEL_CALL_COMMAND" > response.txt
+          if ! python3 .foucault/scripts/check_pr_review_response.py response.txt > /dev/null; then
+            echo "first response failed validation; one retry" >&2
+            python3 .foucault/ci/run_model_command.py "$MODEL_CALL_COMMAND" > response.txt
+          fi
+
+      - name: Validate report structure
+        id: validate
+        run: |
+          set -euo pipefail
+          if ! validation_error="$(
+            python3 .foucault/scripts/check_pr_review_response.py response.txt 2>&1 > /dev/null
+          )"; then
+            echo "final response failed structural validation:" >&2
+            printf '%s\n' "$validation_error" >&2
+            echo "the model response is attached as the invalid-review-response artifact" >&2
+            exit 1
+          fi
+
+      # The model response is untrusted text. A log line starting with :: is a
+      # GitHub Actions workflow command, so echoing the response to stderr lets
+      # a prompt-injected response set outputs, mask values, or stop command
+      # processing. An artifact keeps the response out of the log stream while
+      # leaving it available for diagnosis.
+      - name: Upload the invalid model response
+        if: ${{ failure() && steps.validate.conclusion == 'failure' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: invalid-review-response
+          path: response.txt
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Parse verdict
+        id: verdict
+        env:
+          FAIL_ON_BLOCK: "true"
+        run: |
+          set -euo pipefail
+          # This workflow builds its case text from a pull request diff, so it
+          # always runs PR mode, whose section 6 token is VERDICT. Accepting a
+          # RISK line would let a report answering in another mode satisfy a
+          # merge gate that mode never addressed. File and Wholesale modes
+          # make no merge claim at all.
+          #
+          # The report also quotes the pull request title, body, and diff, all
+          # of which an author controls. A planted VERDICT: APPROVE line
+          # reaching column zero in a quoted block would decide the gate if
+          # the first match won. Section 6 puts the authoritative verdict
+          # last, so read the final match.
+          line="$(grep -E '^VERDICT:' response.txt | tail -1 || true)"
+          if [ -z "$line" ]; then
+            echo "No VERDICT: line found in response. PR mode requires one." >&2
+            exit 1
+          fi
+          delimiter="verdict_line_$(date +%s%N)"
+          {
+            echo "line<<$delimiter"
+            echo "$line"
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
+          # Read the token alone. Searching the whole line matches the reason
+          # too, which both fails closed on
+          # 'VERDICT: APPROVE - resolved earlier BLOCK findings' and fails
+          # open on an unrecognized token, because 'VERDICT: REJECT' matches
+          # neither alternative and would merge.
+          rest="${line#VERDICT:}"
+          # Word splitting is what takes the token off the front here.
+          # shellcheck disable=SC2086
+          set -- $rest
+          verdict_token="${1:-}"
+          case "$verdict_token" in
+            APPROVE)
+              echo "blocked=false" >> "$GITHUB_OUTPUT"
+              ;;
+            # NEEDS-HUMAN is the section 1.8 escalation for a review that
+            # cannot determine safety. Passing it green merges the change the
+            # review declined to clear, so it gates as BLOCK does.
+            BLOCK|NEEDS-HUMAN)
+              if [ "$FAIL_ON_BLOCK" = "true" ]; then
+                echo "blocked=true" >> "$GITHUB_OUTPUT"
+              else
+                echo "blocked=false" >> "$GITHUB_OUTPUT"
+              fi
+              ;;
+            *)
+              # Section 6 admits no other token. Treat one as malformed
+              # output rather than as a verdict, the same way a missing
+              # VERDICT: line already fails. fail_on_block governs which
+              # verdicts block, not whether a non-verdict counts as a pass.
+              echo "Unrecognized verdict token '$verdict_token'." \
+                "Section 6 allows APPROVE, BLOCK, or NEEDS-HUMAN." >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Post PR comment
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        env:
+          PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
+          BASE_SHA: ${{ steps.resolve.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const fs = require('fs');
+            const raw = fs.readFileSync('response.txt', 'utf8');
+            // The report is model output shaped by an attacker-controlled diff.
+            // Fence it so markdown cannot render images, links or mentions.
+            // The fence outruns the longest backtick run in the report, so a
+            // fenced block inside it cannot close the wrapper early.
+            const runs = raw.match(/`+/g) || [];
+            const longest = runs.reduce((n, s) => Math.max(n, s.length), 0);
+            const fence = '`'.repeat(Math.max(3, longest + 1));
+            const metadata = [
+              "Security review metadata",
+              `- Head: \`${process.env.HEAD_SHA}\``,
+              `- Base: \`${process.env.BASE_SHA}\``,
+              `- Workflow run: ${process.env.RUN_URL}`,
+              "",
+            ].join("\n");
+            const body = `${metadata}${fence}\n${raw}\n${fence}`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.PR_NUMBER),
+              body,
+            });
+
+      - name: Fail on a blocking verdict
+        if: ${{ steps.verdict.outputs.blocked == 'true' }}
+        env:
+          VERDICT_LINE: ${{ steps.verdict.outputs.line }}
+        run: |
+          echo "$VERDICT_LINE" >&2
+          exit 1
+
+      - name: Publish check run
+        if: ${{ always() }}
+        timeout-minutes: 1
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        env:
+          HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
+          JOB_STATUS: ${{ job.status }}
+          VERDICT_LINE: ${{ steps.verdict.outputs.line }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            // The review executes on the default branch under workflow_run.
+            // Without a check run on the head revision the result never
+            // appears in the pull request checks box.
+            const conclusion = process.env.JOB_STATUS === "success"
+              ? "success"
+              : "failure";
+            // The verdict line is model output shaped by the pull request
+            // under review. Strip characters that could break the inline
+            // code span, and bound the length.
+            const sanitize = (value) =>
+              value.replace(/[`\\\x00-\x1f\x7f]/g, "").slice(0, 200);
+            const verdictLine = sanitize(process.env.VERDICT_LINE || "")
+              || "review failed before a verdict was produced";
+            const shortHeadSha = process.env.HEAD_SHA.slice(0, 12);
+            const request = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: "security-review",
+              head_sha: process.env.HEAD_SHA,
+              status: "completed",
+              conclusion,
+              details_url: process.env.RUN_URL,
+              output: {
+                title: `security-review: ${conclusion}`,
+                summary: `Head ${shortHeadSha}: model review result: \`${verdictLine}\``,
+              },
+            };
+            let lastError = null;
+            for (let attempt = 0; attempt < 2; attempt++) {
+              try {
+                await github.rest.checks.create(request);
+                lastError = null;
+                break;
+              } catch (error) {
+                lastError = error;
+              }
+            }
+            if (lastError) {
+              if (conclusion === "success") {
+                // A publication flake must not mask a passed review. The
+                // warning stays in the run log and the comment carries the
+                // verdict.
+                core.warning(
+                  `check run publication failed: ${lastError.message}`
+                );
+              } else {
+                throw lastError;
+              }
+            }
+
+  fork-review-skipped:
+    needs: resolve-pr
+    if: needs.resolve-pr.result == 'success' && needs.resolve-pr.outputs.same_repository == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain skipped review
+        run: >-
+          echo "Model review skipped for a fork pull request because provider
+          secrets are not available to this job."

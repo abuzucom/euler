@@ -4,7 +4,7 @@
 #   make check PYTHON=py
 PYTHON ?= python3
 
-PROSE_DOCS = AGENTS.md README.md CHANGELOG.md eval/README.md docs/pr-quality-review.md adopters/README.md
+PROSE_DOCS = AGENTS.md README.md CHANGELOG.md eval/README.md docs/pr-quality-review.md docs/pr-security-review.md adopters/README.md
 # The self-scan skips tests/ because test fixtures hold flagged patterns on purpose.
 QUALITY_PATHS = scripts ci eval/run_eval.py
 
