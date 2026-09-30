@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -36,7 +37,10 @@ class GitRepoCase(unittest.TestCase):
     def git(self, *args: str) -> str:
         """Run git in the repository and return stdout."""
         env = {**os.environ, **GIT_ENV}
-        result = subprocess.run(["git", "-C", str(self.repo), *args], capture_output=True, text=True, env=env, check=True)
+        git = shutil.which("git")
+        self.assertIsNotNone(git, "git not found on PATH")
+        command = [str(git), "-C", str(self.repo), *args]
+        result = subprocess.run(command, capture_output=True, text=True, env=env, check=True)
         return result.stdout.strip()
 
     def commit(self, files: dict[str, str | bytes | None]) -> str:

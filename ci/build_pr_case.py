@@ -15,6 +15,7 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -55,9 +56,17 @@ class BuildOptions:
     max_chars: int = DEFAULT_MAX_CHARS
 
 
+def git_executable() -> str:
+    """Return the absolute path of git on PATH."""
+    executable = shutil.which("git")
+    if executable is None:
+        raise RuntimeError("git not found on PATH. Install git before the build.")
+    return executable
+
+
 def run_git(repo: Path, *args: str) -> bytes:
     """Run git with an argument array and return raw stdout."""
-    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, check=False)
+    result = subprocess.run([git_executable(), "-C", str(repo), *args], capture_output=True, check=False)
     if result.returncode != 0:
         detail = result.stderr.decode("utf-8", errors="replace").strip()
         raise RuntimeError(f"git {args[0]} failed: {detail}. Fetch both revisions before the build.")
