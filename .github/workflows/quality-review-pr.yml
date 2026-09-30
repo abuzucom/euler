@@ -1,0 +1,89 @@
+name: quality-review-pr
+
+# Runs the euler quality review on this repository's pull requests. The
+# workflow_run trigger runs default-branch code after ci completes. Pull
+# request files stay review data. Fork pull requests receive an explicit skip
+# result and no secret.
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  resolve:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      found: ${{ steps.pr.outputs.found }}
+      same_repo: ${{ steps.pr.outputs.same_repo }}
+      number: ${{ steps.pr.outputs.number }}
+      base_sha: ${{ steps.pr.outputs.base_sha }}
+      head_sha: ${{ steps.pr.outputs.head_sha }}
+      title: ${{ steps.pr.outputs.title }}
+      body: ${{ steps.pr.outputs.body }}
+    steps:
+      - name: Resolve pull request from the head revision
+        id: pr
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        with:
+          script: |
+            const headSha = process.env.HEAD_SHA;
+            const pulls = await github.paginate(github.rest.pulls.list, { ...context.repo, state: 'open' });
+            const matches = pulls.filter((pull) => pull.head.sha === headSha);
+            if (matches.length !== 1) {
+              core.setOutput('found', 'false');
+              return;
+            }
+            const pull = matches[0];
+            core.setOutput('found', 'true');
+            core.setOutput('same_repo', String(pull.head.repo && pull.head.repo.full_name === pull.base.repo.full_name));
+            core.setOutput('number', String(pull.number));
+            core.setOutput('base_sha', pull.base.sha);
+            core.setOutput('head_sha', pull.head.sha);
+            core.setOutput('title', pull.title || '');
+            core.setOutput('body', pull.body || '');
+
+  review:
+    needs: resolve
+    if: needs.resolve.outputs.found == 'true' && needs.resolve.outputs.same_repo == 'true'
+    uses: ./.github/workflows/quality-review.yml
+    with:
+      pr_number: ${{ fromJSON(needs.resolve.outputs.number) }}
+      base_sha: ${{ needs.resolve.outputs.base_sha }}
+      head_sha: ${{ needs.resolve.outputs.head_sha }}
+      pr_title: ${{ needs.resolve.outputs.title }}
+      pr_body: ${{ needs.resolve.outputs.body }}
+      # workflow_run runs on the default branch. github.sha names its head commit.
+      quality_ref: ${{ github.sha }}
+      fail_on_block: true
+      exclude_paths: "eval/cases/**"
+    secrets:
+      MODEL_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+
+  fork-skip:
+    needs: resolve
+    if: needs.resolve.outputs.found == 'true' && needs.resolve.outputs.same_repo != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish skip result
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        env:
+          HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
+        with:
+          script: |
+            await github.rest.checks.create({
+              ...context.repo,
+              name: 'quality-review',
+              head_sha: process.env.HEAD_SHA,
+              status: 'completed',
+              conclusion: 'skipped',
+              output: { title: 'Skipped for fork pull request', summary: 'Fork pull requests receive no provider secret.' },
+            });

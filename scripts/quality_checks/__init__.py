@@ -74,6 +74,8 @@ def collect_files(paths: list[Path], root: Path) -> list[Path]:
 
 def run_file_checks(checks: list[Check], path: Path, relative: str) -> list[Finding]:
     """Run the text and AST checks for one file."""
+    if not any(check.text_checks or check.ast_checks for check in checks):
+        return []
     text = read_text(path)
     if text is None:
         return []

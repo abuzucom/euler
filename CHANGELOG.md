@@ -23,4 +23,12 @@ loading `QUALITY.md` into a deployment.
   parsing and the review envelope.
 - Clarified that Blocking and Escalate findings rate HIGH in File, Piece, and
   Wholesale modes.
+- Added the PR quality review: `ci/build_pr_case.py`, `ci/call_model.py`,
+  `ci/check_review_response.py`, `ci/run_review.py`, and
+  `ci/model_providers.json` with Ollama `kimi-k2.7-code` as the active profile.
+- Added the reusable `quality-review` workflow and the `quality-review-pr`
+  caller for this repository.
+- Added `scripts/quality_diff_report.py` and a `ci` step that fails class or
+  tier changes without an eval case.
+- Added `docs/pr-quality-review.md` and `adopters/README.md`.
 - Rewrote `README.md` around the review contract and the foucault boundary.
