@@ -93,6 +93,40 @@ class CallModelTest(unittest.TestCase):
             self.assertIn(profile["endpoint"], call_model.ALLOWED_ENDPOINTS)
 
 
+class EmptyOutputTest(unittest.TestCase):
+    """Reasoning models must not exhaust the budget. Empty text must fail loudly."""
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+
+    def write_profile(self, provider: str, endpoint: str) -> Path:
+        """Write a provider profile file and return its path."""
+        path = Path(self.temp_dir.name) / "providers.json"
+        profile = {"protocol": provider, "endpoint": endpoint, "model": "m", "max_output_tokens": 64}
+        path.write_text(json.dumps({"active_provider": provider, "providers": {provider: profile}}), encoding="utf-8")
+        return path
+
+    def call(self, provider: str, endpoint: str, response: dict) -> tuple[str, RecordingTransport]:
+        """Call the model through a recording transport."""
+        transport = RecordingTransport(response)
+        profile_path = self.write_profile(provider, endpoint)
+        options = call_model.CallOptions(transport=transport, profile_path=profile_path, api_key="k")
+        return call_model.call_model("p", "PR", "{}", options=options), transport
+
+    def test_ollama_disables_thinking(self) -> None:
+        _, transport = self.call("ollama", "https://ollama.com/api", {"message": {"content": "ok"}})
+        self.assertIs(transport.requests[0][2]["think"], False)
+
+    def test_empty_ollama_content_rejected(self) -> None:
+        with self.assertRaises(call_model.ModelCallError):
+            self.call("ollama", "https://ollama.com/api", {"message": {"content": "", "thinking": "long reasoning"}})
+
+    def test_whitespace_anthropic_text_rejected(self) -> None:
+        with self.assertRaises(call_model.ModelCallError):
+            self.call("anthropic", "https://api.anthropic.com/v1", {"content": [{"type": "text", "text": "  \n"}]})
+
+
 class CallOptionsTest(unittest.TestCase):
     """The options object and the deprecation shim for the old parameters."""
 

@@ -28,6 +28,8 @@ loading `QUALITY.md` into a deployment.
 - Enabled the ruff pylint (PL) and bandit (S) rule families. Five S603 and
   S310 findings have no code fix. `make lint` fails on them by decision.
 - Resolved `git` to an absolute path in `ci/build_pr_case.py`.
+- Fixed empty quality review reports. `ci/call_model.py` sends `think: false`
+  to Ollama and raises `ModelCallError` on empty model text.
 
 ### Deprecated
 
