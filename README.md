@@ -113,6 +113,17 @@ these properties:
 validates its structure. `--model-call module:function` runs it against a real
 model.
 
+## PR quality review
+
+[`quality-review.yml`](.github/workflows/quality-review.yml) reviews one pull
+request against `QUALITY.md`. The workflow runs the deterministic checkers,
+calls the configured model, validates the report, posts a comment, and gates
+on the verdict. [`quality-review-pr.yml`](.github/workflows/quality-review-pr.yml)
+calls it for this repository after `ci` completes. The active provider is
+Ollama with `kimi-k2.7-code`. The caller maps the `OLLAMA_API_KEY` secret to
+`MODEL_API_KEY`. See [`docs/pr-quality-review.md`](docs/pr-quality-review.md)
+for the event flow, the trust boundary, and adoption steps.
+
 ## Agent policy
 
 [`AGENTS.md`](AGENTS.md) governs agents working in this repository. It holds a

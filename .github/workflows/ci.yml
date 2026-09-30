@@ -17,6 +17,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          # The policy diff report reads QUALITY.md at the base commit.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Python
@@ -27,3 +29,21 @@ jobs:
 
       - name: Repository checks
         run: make check
+
+      - name: QUALITY.md diff report
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          base_policy="$RUNNER_TEMP/base-quality.md"
+          head_policy="$RUNNER_TEMP/head-quality.md"
+          if git cat-file -e "$BASE_SHA:QUALITY.md" 2>/dev/null; then
+            git show "$BASE_SHA:QUALITY.md" > "$base_policy"
+          else
+            : > "$base_policy"
+          fi
+          git show "$HEAD_SHA:QUALITY.md" > "$head_policy"
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/changed.txt"
+          python3 scripts/quality_diff_report.py "$base_policy" "$head_policy" \
+            --changed-files "$RUNNER_TEMP/changed.txt" | tee -a "$GITHUB_STEP_SUMMARY"

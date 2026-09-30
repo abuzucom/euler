@@ -1,0 +1,23 @@
+{
+  "active_provider": "ollama",
+  "providers": {
+    "ollama": {
+      "protocol": "ollama",
+      "endpoint": "https://ollama.com/api",
+      "model": "kimi-k2.7-code",
+      "max_output_tokens": 16384
+    },
+    "openai-compatible": {
+      "protocol": "openai-compatible",
+      "endpoint": "https://api.openai.com/v1",
+      "model": "gpt-5-mini",
+      "max_output_tokens": 8192
+    },
+    "anthropic": {
+      "protocol": "anthropic",
+      "endpoint": "https://api.anthropic.com/v1",
+      "model": "claude-sonnet-5-5",
+      "max_output_tokens": 8192
+    }
+  }
+}
