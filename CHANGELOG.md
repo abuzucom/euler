@@ -16,4 +16,6 @@ loading `QUALITY.md` into a deployment.
   blockers, and the `VERDICT_JSON` schema version 1.
 - Added `scripts/check_quality_policy.py` and its tests.
 - Added the `Makefile` and the `ci` workflow.
+- Added `scripts/check_code_quality.py` with heuristic checkers for Q3, Q5, Q8,
+  Q9, Q11, Q13, M1, M11, M12, M13, M16, M17, M18, C3, D1, D2, and D5.
 - Rewrote `README.md` around the review contract and the foucault boundary.

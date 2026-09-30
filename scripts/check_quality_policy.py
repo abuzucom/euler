@@ -36,6 +36,7 @@ TIERED_HEADING = re.compile(
 )
 HEADING = re.compile(r"^#{2,3} .+$", re.MULTILINE)
 CODE_SPAN = re.compile(r"`[^`]*`")
+BULLET_PREFIX = "- "
 PROSE_DASH = re.compile(r"\s--?-?\s|\s--?-?$")
 
 
@@ -115,8 +116,8 @@ def find_line_violations(text: str) -> list[str]:
         if len(line) > MAX_PROSE_WIDTH and not line.startswith(LONG_LINE_PREFIXES):
             violations.append(f"line {line_number} exceeds {MAX_PROSE_WIDTH} characters")
         prose = CODE_SPAN.sub("", line.lstrip())
-        if prose.startswith("- "):
-            prose = prose[2:]
+        if prose.startswith(BULLET_PREFIX):
+            prose = prose[len(BULLET_PREFIX) :]
         if PROSE_DASH.search(prose):
             violations.append(f"line {line_number} uses a prose dash")
     return violations
