@@ -45,7 +45,7 @@ jobs:
     steps:
       - name: Resolve pull request from workflow run head
         id: resolve
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         with:
           script: |
             const workflowRun = context.payload.workflow_run;
@@ -133,7 +133,7 @@ jobs:
     steps:
       - name: Resolve pull request metadata
         id: resolve
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           INPUT_PR_NUMBER: ${{ needs.resolve-pr.outputs.pr_number }}
           INPUT_BASE_SHA: ${{ needs.resolve-pr.outputs.base_sha }}
@@ -236,14 +236,14 @@ jobs:
             }
 
       - name: Checkout pull request
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: ${{ steps.resolve.outputs.base_sha }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Checkout AUDIT.md
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: abuzucom/foucault
           ref: ${{ env.FOUCAULT_REF }}
@@ -334,7 +334,7 @@ jobs:
       # leaving it available for diagnosis.
       - name: Upload the invalid model response
         if: ${{ failure() && steps.validate.conclusion == 'failure' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: invalid-review-response
           path: response.txt
@@ -405,7 +405,7 @@ jobs:
           esac
 
       - name: Post PR comment
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
           BASE_SHA: ${{ steps.resolve.outputs.base_sha }}
@@ -448,7 +448,7 @@ jobs:
       - name: Publish check run
         if: ${{ always() }}
         timeout-minutes: 1
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
           JOB_STATUS: ${{ job.status }}
