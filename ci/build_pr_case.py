@@ -198,6 +198,28 @@ def list_head_blobs(options: BuildOptions) -> list[tuple[str, str]]:
     return blobs
 
 
+def read_blobs(object_ids: list[str], repo: Path) -> list[bytes]:
+    """Return blob bodies in request order from one git cat-file --batch call.
+
+    Each object arrives as an '<id> <type> <size>' header line, exactly size body bytes, and one newline.
+    The size field locates the next header, so newlines inside a body never shift the parse.
+    """
+    request = "".join(f"{object_id}\n" for object_id in object_ids).encode("ascii")
+    output = run_git(repo, "cat-file", "--batch", stdin=request)
+    bodies = []
+    offset = 0
+    for object_id in object_ids:
+        header_end = output.index(b"\n", offset)
+        header = output[offset:header_end].split(b" ")
+        if len(header) != CAT_FILE_HEADER_FIELDS or header[1] != b"blob":
+            raise RuntimeError(f"git cat-file returned no blob for {object_id}. Fetch the head revision.")
+        start = header_end + len(b"\n")
+        end = start + int(header[2])
+        bodies.append(output[start:end])
+        offset = end + len(b"\n")
+    return bodies
+
+
 def extract_head(options: BuildOptions, target: Path) -> None:
     """Write the head tree's regular files into target straight from git objects.
 
@@ -205,24 +227,16 @@ def extract_head(options: BuildOptions, target: Path) -> None:
     request hide or rewrite files before the prescan reads them. Symlinks and submodules stay unwritten.
     """
     blobs = list_head_blobs(options)
-    request = "".join(f"{object_id}\n" for object_id, _ in blobs).encode("ascii")
-    output = run_git(options.repo, "cat-file", "--batch", stdin=request)
     root = target.resolve()
-    offset = 0
-    for object_id, path in blobs:
-        header_end = output.index(b"\n", offset)
-        header = output[offset:header_end].split(b" ")
-        if len(header) != CAT_FILE_HEADER_FIELDS or header[1] != b"blob":
-            raise RuntimeError(f"git cat-file returned no blob for {object_id}. Fetch the head revision.")
-        start = header_end + 1
-        end = start + int(header[2])
-        # Each object body ends with one newline before the next header.
-        offset = end + 1
-        destination = (root / path).resolve()
+    # Check every destination before the first write.
+    destinations = [(root / path).resolve() for _, path in blobs]
+    for (_, path), destination in zip(blobs, destinations):
         if not destination.is_relative_to(root):
             raise RuntimeError(f"head tree path {path!r} escapes the extraction directory. Review it by hand.")
+    bodies = read_blobs([object_id for object_id, _ in blobs], options.repo)
+    for destination, body in zip(destinations, bodies):
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_bytes(output[start:end])
+        destination.write_bytes(body)
 
 
 def is_excluded(path: str, exclude: list[str]) -> bool:

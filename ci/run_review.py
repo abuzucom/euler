@@ -35,6 +35,7 @@ DEFAULT_MODEL_CALL = "ci.call_model:call_model"
 VERDICT_RANK = check_review_response.VERDICT_RANK
 BLOCKING_VERDICTS = frozenset({"BLOCK", "NEEDS-HUMAN"})
 FENCE_RUN = re.compile(r"`{3,}")
+CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 MIN_FENCE = 3
 JSON_INDENT = 2
 # One first attempt plus one retry after a validation failure.
@@ -105,7 +106,8 @@ def fenced_list(items: list[str]) -> str:
     Paths, prescan messages, and validation problems carry pull request or model text. A fence keeps that
     text from rendering as markdown in the posted comment.
     """
-    shown = [" ".join(item.split())[:MAX_ITEM_CHARS] for item in items[:MAX_LISTED_ITEMS]]
+    # Replacing only control characters keeps each item on one line and keeps spaces in file names.
+    shown = [CONTROL_CHARS.sub("?", item)[:MAX_ITEM_CHARS] for item in items[:MAX_LISTED_ITEMS]]
     if len(items) > MAX_LISTED_ITEMS:
         shown.append(f"... and {len(items) - MAX_LISTED_ITEMS} more")
     return fence("\n".join(shown))

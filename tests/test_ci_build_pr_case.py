@@ -172,6 +172,22 @@ class BuildTest(GitRepoCase):
         prescan = json.loads((self.build(base, head) / "prescan.json").read_text(encoding="utf-8"))
         self.assertTrue(any(item["file"] == "evil.py" and item["class"] == "M1" for item in prescan))
 
+    def test_extract_head_writes_exact_blobs(self) -> None:
+        contents = {
+            "a.py": "\n\nfirst\nsecond\n",
+            "dir/b.txt": "no trailing newline",
+            "dir/deep/c.bin": b"\n\x00\n1 blob 99\n\xff",
+            "empty.txt": "",
+        }
+        head = self.commit(contents)
+        target = Path(self.temp_dir.name) / "tree"
+        target.mkdir()
+        options = build_pr_case.BuildOptions(self.repo, head, head, target, "", "", 1)
+        build_pr_case.extract_head(options, target)
+        for name, content in contents.items():
+            expected = content if isinstance(content, bytes) else content.encode("utf-8")
+            self.assertEqual((target / name).read_bytes(), expected, name)
+
     def test_chunks_over_limit_listed_unreviewed(self) -> None:
         base = self.commit({"a.txt": "x\n"})
         head = self.commit({"one.py": "A = 1\n" * 40, "two.py": "B = 1\n" * 40})
