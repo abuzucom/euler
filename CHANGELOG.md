@@ -50,6 +50,8 @@ loading `QUALITY.md` into a deployment.
   unquoted `set --`.
 - Set a 30-minute timeout on the `security-review-pr.yml` `review` job and a
   45-minute timeout on the `quality-review.yml` `review` job.
+- `security-review-pr.yml` queues a second run for the same head instead of
+  cancelling the review in progress.
 - Documented the shared model key risk and the manual settings steps in
   `docs/pr-security-review.md`.
 

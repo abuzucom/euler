@@ -72,6 +72,9 @@ own result.
 The `review` job stops after 30 minutes. The job makes at most two model calls.
 The foucault adapter bounds each call at 600 seconds.
 
+Runs for one head SHA share a concurrency group. A second run waits for the
+first run instead of cancelling it. The dedupe then skips the second review.
+
 ## Differences from upstream
 
 - Every foucault script path carries the `.foucault/` prefix.

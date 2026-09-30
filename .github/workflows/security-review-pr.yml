@@ -18,9 +18,12 @@ name: security-review-pr
     workflows: [ci]
     types: [completed]
 
+# A second ci run for the same head waits here instead of cancelling a paid
+# review in progress. When it starts, the first run's check run and marker
+# artifact exist, so the resolve-pr dedupe skips the model call.
 concurrency:
   group: security-review-${{ github.event.workflow_run.head_sha }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # Each job declares only the permissions it uses. Upstream foucault grants
 # these permissions at workflow level.
