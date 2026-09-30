@@ -115,6 +115,8 @@ following checks exist:
 
 - `docs/pr-quality-review.md` before any change to `ci/` or the review
   workflows.
+- `docs/pr-security-review.md` before any change to
+  `.github/workflows/security-review-pr.yml`.
 
 ### Policy changes
 

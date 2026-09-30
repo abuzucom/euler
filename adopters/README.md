@@ -20,6 +20,13 @@ Release tags follow the `CHANGELOG.md` versions, such as `v0.1.0`. Tag
 creation requires active-human consent at release time. Pin a full commit SHA
 in workflows even when a tag exists.
 
+## Upstream adoptions
+
+- `abuzucom/foucault` v3.3.14 at commit
+  `06d74fba4d9013654cdaf9896bb7535724385186` runs through
+  `.github/workflows/security-review-pr.yml`. See
+  `docs/pr-security-review.md`.
+
 ## Current adopters
 
 - `abuzucom/euler` reviews its own pull requests through
