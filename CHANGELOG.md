@@ -16,6 +16,8 @@ loading `QUALITY.md` into a deployment.
 - Added `make lint` with ruff, mypy, and yamllint pinned by hash in
   `requirements-dev.txt`. The `ci` workflow runs it in a `lint` job.
 - Added a Python 3.11, 3.12, and 3.13 matrix to the `ci` checks job.
+- Set a 15-minute timeout on the `checks`, `lint`, CodeQL `analyze`, and
+  scheduled `validate` jobs.
 
 ### Changed
 
