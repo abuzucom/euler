@@ -136,23 +136,39 @@ def read_diff(options: BuildOptions) -> tuple[list[str], set[str], dict[str, str
     """
     revisions = (options.base, options.head)
     output = run_git(options.repo, "diff", "-z", "--raw", "-p", "--no-renames", "--no-color", *revisions)
-    raw_paths, raw_patches = split_raw_and_patches(output)
+    combined = parse_combined_diff(output)
+    raw_paths = combined[0] if combined else read_changed_paths(options)
     paths, undecodable = decode_paths(b"\0".join(raw_paths))
     binary = read_binary_paths(options)
-    if len(raw_patches) == len(raw_paths):
-        by_path = dict(zip(raw_paths, raw_patches))
+    if combined:
+        by_path = dict(zip(*combined))
         patches = {
             path: by_path[path.encode("utf-8")].decode("utf-8", errors="replace")
             for path in paths
             if path not in binary
         }
     else:
-        sys.stderr.write(
-            f"warning: {len(raw_patches)} patches for {len(raw_paths)} paths in the combined diff. "
-            "Reading each patch separately.\n"
-        )
+        sys.stderr.write("warning: the combined diff output is malformed. Reading each patch separately.\n")
         patches = {path: read_file_patch(options, path) for path in paths if path not in binary}
     return paths + undecodable, binary, patches, undecodable
+
+
+def parse_combined_diff(output: bytes) -> tuple[list[bytes], list[bytes]] | None:
+    """Return paths and matching patches from combined diff output, or None when the output is malformed."""
+    try:
+        paths, patches = split_raw_and_patches(output)
+    except ValueError:
+        # A truncated raw record lacks its NUL terminator. The caller reads each patch separately.
+        return None
+    if len(paths) != len(patches):
+        return None
+    return paths, patches
+
+
+def read_changed_paths(options: BuildOptions) -> list[bytes]:
+    """Return the raw changed paths from a NUL-separated git diff --name-only call."""
+    raw = run_git(options.repo, "diff", "-z", "--name-only", "--no-renames", options.base, options.head)
+    return [item for item in raw.split(b"\0") if item]
 
 
 def read_file_patch(options: BuildOptions, path: str) -> str:

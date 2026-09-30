@@ -25,7 +25,7 @@ loading `QUALITY.md` into a deployment.
   them as literal pathspecs. A file name with spaces or non-ASCII characters
   no longer hides its patch from the model and the prescan.
 - `ci/build_pr_case.py` reads every patch from one `git diff --raw -p` call.
-  A count mismatch falls back to one call per file.
+  Malformed output or a count mismatch falls back to one call per file.
 - A path that is not valid UTF-8 and a text file with an empty patch become
   unreviewed files.
 - The prescan reads head blobs with `git ls-tree` and `git cat-file`. A
