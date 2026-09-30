@@ -46,6 +46,14 @@ class GitRepoCase(unittest.TestCase):
         result = subprocess.run(command, capture_output=True, text=True, env=env, check=True)
         return result.stdout.strip()
 
+    def git_raw(self, *args: str) -> str:
+        """Run git in the repository and return stdout without stripping."""
+        git = shutil.which("git")
+        self.assertIsNotNone(git, "git not found on PATH")
+        env = {**os.environ, **GIT_ENV, "GIT_LITERAL_PATHSPECS": "1"}
+        result = subprocess.run([str(git), "-C", str(self.repo), *args], capture_output=True, env=env, check=True)
+        return result.stdout.decode("utf-8", errors="replace")
+
     def commit(self, files: dict[str, str | bytes | None]) -> str:
         """Write, delete, and commit files. Return the commit SHA."""
         for name, content in files.items():
@@ -187,6 +195,32 @@ class BuildTest(GitRepoCase):
         for name, content in contents.items():
             expected = content if isinstance(content, bytes) else content.encode("utf-8")
             self.assertEqual((target / name).read_bytes(), expected, name)
+
+    def test_single_diff_call_matches_per_file_patches(self) -> None:
+        base = self.commit({"mode.sh": "echo hi\n", "keep.txt": "a\n"})
+        (self.repo / "mode.sh").chmod(0o755)
+        head = self.commit({
+            "src/with space.py": "A = 1\n",
+            "tab\tname.py": "B = 2\n",
+            "fake.txt": "diff --git a/x b/x\n",
+            "logo.png": b"\x89PNG\x00\x01",
+            "keep.txt": "a\nb\n",
+        })
+        options = build_pr_case.BuildOptions(self.repo, base, head, Path(self.temp_dir.name), "", "", 1)
+        changed, binary, patches, undecodable = build_pr_case.read_diff(options)
+        self.assertEqual(undecodable, [])
+        self.assertEqual(binary, {"logo.png"})
+        self.assertEqual(sorted(changed), sorted([*patches, "logo.png"]))
+        self.assertEqual(len(patches), 5)
+        for path, patch in patches.items():
+            expected = self.git_raw("diff", "--no-color", "--no-renames", base, head, "--", path)
+            self.assertEqual(patch, expected, path)
+
+    def test_deep_python_with_requirements_listed_unreviewed(self) -> None:
+        base = self.commit({"requirements.txt": "requests==2.32.3\n"})
+        head = self.commit({"deep.py": DEEP_PYTHON})
+        manifest = json.loads((self.build(base, head) / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["unreviewed"], ["deep.py"])
 
     def test_chunks_over_limit_listed_unreviewed(self) -> None:
         base = self.commit({"a.txt": "x\n"})

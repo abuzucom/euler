@@ -16,6 +16,7 @@ from .common import (
     SOURCE_SUFFIXES,
     Finding,
     is_test_path,
+    parse_python,
     read_text,
 )
 
@@ -262,9 +263,8 @@ def import_name(package: str) -> str:
 
 def python_imports(path: Path) -> set[str]:
     """Return top-level module names imported by one Python file."""
-    try:
-        tree = ast.parse(read_text(path) or "")
-    except SyntaxError:
+    tree = parse_python(path, read_text(path) or "")
+    if tree is None:
         return set()
     names: set[str] = set()
     for node in ast.walk(tree):

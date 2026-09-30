@@ -31,9 +31,10 @@ a report with a machine-readable verdict. The check fails on `BLOCK` or
 ## Envelope and prescan
 
 `ci/build_pr_case.py` reads the diff and the head tree from git objects. The
-builder reads changed paths as NUL-separated output. It passes each path to
-git as a literal pathspec. A path with spaces, quotes, or non-ASCII characters
-keeps its full patch.
+builder reads changed paths and every patch from one NUL-separated
+`git diff --raw -p` call. Git receives each fallback path as a literal
+pathspec. A path with spaces, quotes, or non-ASCII characters keeps its full
+patch.
 
 The builder writes the head tree's regular files from `git ls-tree` and
 `git cat-file` output. The head commit's `export-ignore` and `export-subst`
@@ -63,7 +64,9 @@ item in the `prescan` array of `VERDICT_JSON`.
   - a file in a chunk past `--max-chunks`, 20 by default
   - a path that is not valid UTF-8
   - a text file with an empty patch
-  - a Python or TOML file that exhausts parser recursion depth or memory
+  - a Python or TOML file that exhausts parser recursion depth or memory.
+    A child process screens changed files first. The builder removes a
+    failing file from its extracted tree before the checkers run.
 - Unreviewed files force NEEDS-HUMAN.
 - A model call failure forces NEEDS-HUMAN for that chunk. The comment omits the
   provider error body. The job log holds it.

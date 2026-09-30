@@ -6,28 +6,42 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
-## [0.4.1] (2026-09-30)
+## [0.5.0] (2026-09-30)
+
+### Added
+
+- `ci/build_pr_case.py` takes an optional `--max-chunks`, 20 by default.
+  Files in chunks past the limit become unreviewed files.
+- `quality-review.yml` takes an optional `max_chunks` input, 20 by default.
+- `quality_checks.run_checks` takes an optional `parse_failures` list. The
+  list receives each path whose parse hits a recursion or memory limit.
+- `scripts/quality_checks/parser_limits.py` screens Python and TOML files for
+  parser limits in a child process. `quality_checks.find_parser_limit_files`
+  runs it.
 
 ### Fixed
 
 - `ci/build_pr_case.py` reads changed paths with `git diff -z` and passes
   them as literal pathspecs. A file name with spaces or non-ASCII characters
   no longer hides its patch from the model and the prescan.
+- `ci/build_pr_case.py` reads every patch from one `git diff --raw -p` call.
+  A count mismatch falls back to one call per file.
 - A path that is not valid UTF-8 and a text file with an empty patch become
   unreviewed files.
 - The prescan reads head blobs with `git ls-tree` and `git cat-file`. A
   `.gitattributes` `export-ignore` entry in the pull request no longer hides
   files from the prescan.
-- `ci/build_pr_case.py` takes an optional `--max-chunks`, 20 by default.
-  Files in chunks past the limit become unreviewed files.
 - `ci/run_review.py` fences the blocking prescan list, the unreviewed list,
   and the validation problems in the PR comment. Each list shows at most 50
   items of at most 300 characters. Control characters in an item become `?`.
 - `ci/call_model.py` writes the provider error body to the job log only. The
   `ModelCallError` message keeps the HTTP status.
 - The checkers skip a Python or TOML file that raises `RecursionError` or
-  `MemoryError` with a warning. The PR builder lists such a file as
-  unreviewed.
+  `MemoryError` with a warning. The D5 import scan shares that handling.
+- The PR builder screens changed files for parser limits in a child process
+  before the checkers run. It removes each failing file from its extracted
+  tree and lists the file as unreviewed. The main process parses each file
+  once.
 - `security-review-pr.yml` trusts a `security-review` check run for dedupe
   only when its summary names a default-branch run of this workflow
   holding a `security-review-head-<sha>` marker artifact. `resolve-pr` gains
@@ -36,7 +50,6 @@ loading `QUALITY.md` into a deployment.
   unquoted `set --`.
 - Set a 30-minute timeout on the `security-review-pr.yml` `review` job and a
   45-minute timeout on the `quality-review.yml` `review` job.
-- `quality-review.yml` takes an optional `max_chunks` input, 20 by default.
 - Documented the shared model key risk and the manual settings steps in
   `docs/pr-security-review.md`.
 
