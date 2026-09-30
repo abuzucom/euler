@@ -63,9 +63,14 @@ conditions hold:
 A failed lookup counts as no review. The marker artifact expires after 30
 days. A later `ci` run on an older head then triggers a fresh review.
 
-The `quality-review` check run has no dedupe. A spoofed `quality-review` check
-run adds a second check run with the same name. The real review still posts its
-own result.
+### Override
+
+Any workflow with `checks: write` can post a `security-review` or
+`quality-review` check run. The checks box and a required check follow the
+most recent check run with a given name. A spoofed success posted after the
+real result overrides the real result. A spoofed success after a real BLOCK
+turns the gate green. The dedupe stops a skipped review only. It does not stop
+an override. Manual settings step 6 closes the override.
 
 ## Job limits
 
@@ -119,9 +124,13 @@ performs them:
 4. Delete the `OLLAMA_API_KEY` repository secret.
 5. Set a spending cap with the provider.
 6. Add a ruleset that requires human review for changes under
-   `.github/workflows/`.
+   `.github/workflows/`. This step closes the override. A pull request that
+   adds or changes a workflow cannot merge before a human reviews the
+   workflow.
 7. Require the `security-review` and `quality-review` checks from the GitHub
-   Actions app.
+   Actions app. This step blocks check runs from other apps. The GitHub
+   Actions app authors both the real and the spoofed check runs. Step 7 does
+   not block an override from a pull request workflow.
 
 ## Upgrade
 

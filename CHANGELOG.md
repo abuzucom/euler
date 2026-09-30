@@ -54,6 +54,9 @@ loading `QUALITY.md` into a deployment.
   cancelling the review in progress.
 - Documented the shared model key risk and the manual settings steps in
   `docs/pr-security-review.md`.
+- `docs/pr-security-review.md` states that a later spoofed check run with the
+  same name overrides the real result. The workflow review ruleset closes the
+  override. Requiring the GitHub Actions app does not.
 
 ## [0.4.0] (2026-09-30)
 
