@@ -148,7 +148,9 @@ def evaluate_response(case: Case, response: str) -> list[str]:
         failures.append(report.json_error or "missing VERDICT_JSON")
     if report.payload is not None:
         reported = {item.get("class") for item in report.payload.get("findings", []) if isinstance(item, dict)}
-        failures.extend(f"missing expected class {item}" for item in expected["expected_classes"] if item not in reported)
+        failures.extend(
+            f"missing expected class {item}" for item in expected["expected_classes"] if item not in reported
+        )
     return failures
 
 

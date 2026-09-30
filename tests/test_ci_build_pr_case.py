@@ -63,7 +63,14 @@ class GitRepoCase(unittest.TestCase):
         """Run the builder and return the output directory."""
         out_dir = Path(self.temp_dir.name) / "review"
         options = build_pr_case.BuildOptions(
-            repo=self.repo, base=base, head=head, out_dir=out_dir, title="Title", body="Body text", pr_number=7, **kwargs
+            repo=self.repo,
+            base=base,
+            head=head,
+            out_dir=out_dir,
+            title="Title",
+            body="Body text",
+            pr_number=7,
+            **kwargs,
         )
         build_pr_case.build(options)
         return out_dir
@@ -96,7 +103,9 @@ class BuildTest(GitRepoCase):
     def test_excluded_paths_skip_prescan(self) -> None:
         base = self.commit({"README.md": "x\n"})
         head = self.commit({"eval/cases/a/input.py": "try:\n    run()\nexcept ValueError:\n    pass\n"})
-        prescan = json.loads((self.build(base, head, exclude=["eval/cases/**"]) / "prescan.json").read_text(encoding="utf-8"))
+        prescan = json.loads(
+            (self.build(base, head, exclude=["eval/cases/**"]) / "prescan.json").read_text(encoding="utf-8")
+        )
         self.assertEqual(prescan, [])
 
     def test_binary_file_listed_unreviewed(self) -> None:

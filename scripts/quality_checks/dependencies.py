@@ -39,10 +39,29 @@ IMPORT_NAME_OVERRIDES = {
     "attrs": "attr",
 }
 SCOPED_PACKAGE_SEGMENTS = 2
-NODE_BUILTINS = frozenset(
-    {"assert", "buffer", "child_process", "crypto", "events", "fs", "http", "https", "net", "os", "path",
-     "process", "querystring", "readline", "stream", "timers", "tls", "url", "util", "worker_threads", "zlib"}
-)
+NODE_BUILTINS = frozenset({
+    "assert",
+    "buffer",
+    "child_process",
+    "crypto",
+    "events",
+    "fs",
+    "http",
+    "https",
+    "net",
+    "os",
+    "path",
+    "process",
+    "querystring",
+    "readline",
+    "stream",
+    "timers",
+    "tls",
+    "url",
+    "util",
+    "worker_threads",
+    "zlib",
+})
 
 
 def load_toml(path: Path) -> dict:
@@ -105,7 +124,7 @@ def unpinned_requirement_lines(relative: str, lines: list[tuple[int, str]]) -> l
         requirement = line.split(" #", 1)[0].strip()
         if not requirement or requirement.startswith(("#", "-")):
             continue
-        if EXACT_REQUIREMENT.match(requirement) or "@" in requirement and "#sha256=" in requirement:
+        if EXACT_REQUIREMENT.match(requirement) or ("@" in requirement and "#sha256=" in requirement):
             continue
         findings.append(Finding(relative, number, "D1", f"unpinned requirement '{requirement}'", False))
     return findings
