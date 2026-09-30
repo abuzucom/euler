@@ -28,6 +28,17 @@ loading `QUALITY.md` into a deployment.
 - The checkers skip a Python or TOML file that raises `RecursionError` or
   `MemoryError` with a warning. The PR builder lists such a file as
   unreviewed.
+- `security-review-pr.yml` trusts a `security-review` check run for dedupe
+  only when its `details_url` names a default-branch run of this workflow
+  holding a `security-review-head-<sha>` marker artifact. `resolve-pr` gains
+  `actions: read`.
+- `security-review-pr.yml` reads the verdict token with `read -r` in place of
+  unquoted `set --`.
+- Set a 30-minute timeout on the `security-review-pr.yml` `review` job and a
+  45-minute timeout on the `quality-review.yml` `review` job.
+- `quality-review.yml` takes an optional `max_chunks` input, 20 by default.
+- Documented the shared model key risk and the manual settings steps in
+  `docs/pr-security-review.md`.
 
 ## [0.4.0] (2026-09-30)
 

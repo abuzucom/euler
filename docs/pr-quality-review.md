@@ -16,7 +16,8 @@ a report with a machine-readable verdict. The check fails on `BLOCK` or
 5. A fork pull request receives a `skipped` check run. The skip job receives
    no secret.
 6. The reusable workflow allows one active review per pull request. A newer
-   head cancels an obsolete run.
+   head cancels an obsolete run. The `review` job stops after 45 minutes. The
+   `max_chunks` input caps the envelopes at 20 by default.
 7. The workflow checks out the base revision with full history. The head
    commit stays in the object store without a checkout.
 8. The workflow checks out `abuzucom/euler` at `quality_ref` into `.euler`.
@@ -85,6 +86,10 @@ Every checkout sets `persist-credentials: false`.
 The provider receives `QUALITY.md` and the review envelope. The provider
 receives no GitHub token and no other repository secret.
 `ci/call_model.py` sends requests only to endpoints in `ALLOWED_ENDPOINTS`.
+
+A same-repository branch can add a `pull_request` workflow that reads a
+repository secret. `docs/pr-security-review.md` lists the residual risk for
+the shared model key and the manual settings steps.
 
 ## Adoption in another repository
 

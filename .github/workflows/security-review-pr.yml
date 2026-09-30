@@ -31,6 +31,7 @@ jobs:
   resolve-pr:
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       checks: read
       contents: read
       pull-requests: read
@@ -97,12 +98,61 @@ jobs:
                 per_page: 100,
               },
             );
-            const alreadyReviewed = checkRuns.some((run) =>
-              run.status === "completed" &&
-              /VERDICT: (APPROVE|BLOCK|NEEDS-HUMAN)\b/.test(
-                run.output?.summary || ""
-              )
+            // A pull request can add its own workflow that creates a check run
+            // with this name and a fake verdict. Count a check run only when
+            // its details_url names a run of this workflow file on the default
+            // branch, and that run holds the marker artifact for this head. A
+            // details_url copied from a review of another head has no such
+            // artifact. A failed lookup counts as not reviewed.
+            const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const runUrlPattern = new RegExp(
+              `^https://github\\.com/${escapeRegExp(baseRepository)}/actions/runs/(\\d+)(?:/job/\\d+)?$`,
+              "i",
             );
+            const isGenuineReview = async (checkRun) => {
+              if (
+                checkRun.status !== "completed" ||
+                !/VERDICT: (APPROVE|BLOCK|NEEDS-HUMAN)\b/.test(checkRun.output?.summary || "")
+              ) {
+                return false;
+              }
+              const match = runUrlPattern.exec(checkRun.details_url || "");
+              if (!match) {
+                return false;
+              }
+              const runId = Number(match[1]);
+              try {
+                const { data: run } = await github.rest.actions.getWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: runId,
+                });
+                const genuineRun = run.path === ".github/workflows/security-review-pr.yml" &&
+                  run.event === "workflow_run" &&
+                  run.head_branch === context.payload.repository?.default_branch &&
+                  run.repository?.full_name?.toLowerCase() === baseRepository.toLowerCase();
+                if (!genuineRun) {
+                  return false;
+                }
+                const { data: artifacts } = await github.rest.actions.listWorkflowRunArtifacts({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: runId,
+                  name: `security-review-head-${headSha}`,
+                });
+                return artifacts.total_count > 0;
+              } catch (error) {
+                core.warning(`check run provenance lookup failed: ${error.message}`);
+                return false;
+              }
+            };
+            let alreadyReviewed = false;
+            for (const checkRun of checkRuns) {
+              if (await isGenuineReview(checkRun)) {
+                alreadyReviewed = true;
+                break;
+              }
+            }
             core.setOutput("already_reviewed", alreadyReviewed ? "true" : "false");
             core.setOutput(
               "same_repository",
@@ -123,6 +173,8 @@ jobs:
       && needs.resolve-pr.outputs.same_repository == 'true'
       && needs.resolve-pr.outputs.already_reviewed != 'true'
     runs-on: ubuntu-latest
+    # Two model calls of up to 600 seconds each plus setup.
+    timeout-minutes: 30
     permissions:
       checks: write
       contents: read
@@ -375,10 +427,9 @@ jobs:
           # open on an unrecognized token, because 'VERDICT: REJECT' matches
           # neither alternative and would merge.
           rest="${line#VERDICT:}"
-          # Word splitting is what takes the token off the front here.
-          # shellcheck disable=SC2086
-          set -- $rest
-          verdict_token="${1:-}"
+          # read takes the first word without glob expansion of model text.
+          verdict_token=""
+          read -r verdict_token _ <<<"$rest" || true
           case "$verdict_token" in
             APPROVE)
               echo "blocked=false" >> "$GITHUB_OUTPUT"
@@ -403,6 +454,22 @@ jobs:
               exit 1
               ;;
           esac
+
+      # The dedupe in resolve-pr trusts a security-review check run only when
+      # the run it names holds this artifact. The name binds the run to the
+      # head it reviewed.
+      - name: Write review marker
+        env:
+          HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
+        run: printf '%s\n' "$HEAD_SHA" > review-head.txt
+
+      - name: Upload review marker
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: security-review-head-${{ steps.resolve.outputs.head_sha }}
+          path: review-head.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Post PR comment
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
