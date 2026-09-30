@@ -343,6 +343,25 @@ class ParserLimitTest(CheckerCase):
             self.assertTrue(quality_checks.exceeds_parser_limits(paths[0]))
         self.assertEqual(findings, [])
 
+    def test_child_finds_parser_limit_files(self) -> None:
+        files = {"deep.py": DEEP_PYTHON, "pyproject.toml": DEEP_TOML, "ok.py": "A = 1\n", "broken.py": "def f(:\n"}
+        paths = self.write_files(files)
+        found = quality_checks.find_parser_limit_files(paths)
+        self.assertEqual(sorted(path.name for path in found), ["deep.py", "pyproject.toml"])
+
+    def test_run_checks_records_parse_failures(self) -> None:
+        paths = self.write_files({"deep.py": DEEP_PYTHON, "ok.py": "A = 1\n"})
+        failures: list[str] = []
+        with contextlib.redirect_stderr(io.StringIO()):
+            quality_checks.run_checks(list(quality_checks.CHECKS), paths, self.root, parse_failures=failures)
+        self.assertEqual(failures, ["deep.py"])
+
+    def test_unused_deps_skips_deep_python(self) -> None:
+        self.write_files({"requirements.txt": "requests==2.32.3\n", "deep.py": DEEP_PYTHON})
+        with contextlib.redirect_stderr(io.StringIO()):
+            findings = quality_checks.run_checks(["unused-deps"], [self.root], self.root)
+        self.assertEqual({finding.class_id for finding in findings}, {"D5"})
+
     def test_syntax_error_within_parser_limits(self) -> None:
         paths = self.write_files({"broken.py": "def f(:\n", "ok.toml": "a = 1\n"})
         with contextlib.redirect_stderr(io.StringIO()):

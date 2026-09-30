@@ -41,6 +41,8 @@ LS_TREE_FIELDS = 3
 # cat-file --batch headers hold object ID, type, and size fields.
 CAT_FILE_HEADER_FIELDS = 3
 REGULAR_FILE_MODES = frozenset({b"100644", b"100755"})
+PATCH_HEADER = b"diff --git "
+PATCH_SEPARATOR = b"\n" + PATCH_HEADER
 JSON_INDENT = 2
 PROJECT_CHECKS = [name for name, check in quality_checks.CHECKS.items() if check.project_check is not None]
 FILE_CHECKS = [name for name in quality_checks.CHECKS if name not in PROJECT_CHECKS]
@@ -133,17 +135,53 @@ def read_diff(options: BuildOptions) -> tuple[list[str], set[str], dict[str, str
     undecodable name back as an argument here, so such a path gets no patch.
     """
     revisions = (options.base, options.head)
-    raw = run_git(options.repo, "diff", "-z", "--name-only", "--no-renames", *revisions)
-    paths, undecodable = decode_paths(raw)
+    output = run_git(options.repo, "diff", "-z", "--raw", "-p", "--no-renames", "--no-color", *revisions)
+    raw_paths, raw_patches = split_raw_and_patches(output)
+    paths, undecodable = decode_paths(b"\0".join(raw_paths))
     binary = read_binary_paths(options)
-    patches = {
-        path: run_git(options.repo, "diff", "--no-color", "--no-renames", *revisions, "--", path).decode(
-            "utf-8", errors="replace"
+    if len(raw_patches) == len(raw_paths):
+        by_path = dict(zip(raw_paths, raw_patches))
+        patches = {
+            path: by_path[path.encode("utf-8")].decode("utf-8", errors="replace")
+            for path in paths
+            if path not in binary
+        }
+    else:
+        sys.stderr.write(
+            f"warning: {len(raw_patches)} patches for {len(raw_paths)} paths in the combined diff. "
+            "Reading each patch separately.\n"
         )
-        for path in paths
-        if path not in binary
-    }
+        patches = {path: read_file_patch(options, path) for path in paths if path not in binary}
     return paths + undecodable, binary, patches, undecodable
+
+
+def read_file_patch(options: BuildOptions, path: str) -> str:
+    """Return the patch for one path from its own git diff call."""
+    raw = run_git(options.repo, "diff", "--no-color", "--no-renames", options.base, options.head, "--", path)
+    return raw.decode("utf-8", errors="replace")
+
+
+def split_raw_and_patches(output: bytes) -> tuple[list[bytes], list[bytes]]:
+    """Split 'git diff -z --raw -p' output into raw record paths and per-file patches, in git's order.
+
+    Each raw record is ':<modes> <ids> <status>' and a path, both NUL-terminated. One more NUL precedes
+    the patches. Patch content lines start with ' ', '+', '-', or a backslash, so a line starting with
+    'diff --git ' always opens the next file.
+    """
+    paths = []
+    offset = 0
+    while output.startswith(b":", offset):
+        meta_end = output.index(b"\0", offset)
+        path_end = output.index(b"\0", meta_end + 1)
+        paths.append(output[meta_end + 1 : path_end])
+        offset = path_end + 1
+    section = output[offset + 1 :] if output.startswith(b"\0", offset) else output[offset:]
+    if not section:
+        return paths, []
+    pieces = section.split(PATCH_SEPARATOR)
+    patches = [pieces[0], *(PATCH_HEADER + piece for piece in pieces[1:])]
+    # Every piece but the last lost its trailing newline to the split.
+    return paths, [patch + b"\n" for patch in patches[:-1]] + patches[-1:]
 
 
 def split_empty_patches(patches: dict[str, str]) -> tuple[dict[str, str], list[str]]:
@@ -258,6 +296,18 @@ def present_paths(tree: Path, paths: list[str]) -> list[str]:
     return [path for path in paths if (tree / path).is_file()]
 
 
+def remove_parser_limit_files(tree: Path, paths: list[str]) -> list[str]:
+    """Delete the files that hit a parser limit from the builder's own extracted tree and return them.
+
+    A child process runs the parse, so a MemoryError never reaches this process. Deleting the file keeps
+    the file checks and the project checks from parsing it again.
+    """
+    failing = quality_checks.find_parser_limit_files([tree / path for path in paths])
+    for path in failing:
+        path.unlink()
+    return [path.relative_to(tree).as_posix() for path in failing]
+
+
 def build_prescan(options: BuildOptions, changed: list[str], patches: dict[str, str]) -> tuple[list[dict], list[str]]:
     """Return prescan candidates with global IDs and the scanned files that exhaust the parsers."""
     added = {path: parse_added_lines(patch) for path, patch in patches.items()}
@@ -265,10 +315,12 @@ def build_prescan(options: BuildOptions, changed: list[str], patches: dict[str, 
         tree = Path(temp_dir)
         extract_head(options, tree)
         scanned = [path for path in changed if path in patches and not is_excluded(path, options.exclude)]
+        unparsed = remove_parser_limit_files(tree, present_paths(tree, scanned))
         present = [tree / path for path in present_paths(tree, scanned)]
-        findings = quality_checks.run_checks(FILE_CHECKS, present, tree, changed=changed)
+        parse_failures: list[str] = []
+        findings = quality_checks.run_checks(FILE_CHECKS, present, tree, changed=changed, parse_failures=parse_failures)
         findings += quality_checks.run_checks(PROJECT_CHECKS, [tree], tree, changed=changed)
-        unparsed = [path for path in present_paths(tree, scanned) if quality_checks.exceeds_parser_limits(tree / path)]
+        unparsed += [path for path in parse_failures if path not in unparsed]
     kept = [item for item in findings if keep_finding(item, set(changed), added, options.exclude)]
     prescan = [
         {

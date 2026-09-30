@@ -16,12 +16,13 @@ from .common import (
     SKIPPED_DIRECTORIES,
     Finding,
     exceeds_parser_limits,
-    parse_python,
+    find_parser_limit_files,
+    parse_python_status,
     read_text,
     relative_name,
 )
 
-__all__ = ["CHECKS", "Finding", "collect_files", "exceeds_parser_limits", "run_checks"]
+__all__ = ["CHECKS", "Finding", "collect_files", "exceeds_parser_limits", "find_parser_limit_files", "run_checks"]
 
 TextCheck = Callable[[Path, str, str], list[Finding]]
 AstCheck = Callable[[str, "python_ast.ast.Module"], list[Finding]]
@@ -80,8 +81,10 @@ def collect_files(paths: list[Path], root: Path) -> list[Path]:
     return files
 
 
-def run_file_checks(checks: list[Check], path: Path, relative: str) -> list[Finding]:
-    """Run the text and AST checks for one file."""
+def run_file_checks(
+    checks: list[Check], path: Path, relative: str, parse_failures: list[str] | None = None
+) -> list[Finding]:
+    """Run the text and AST checks for one file. Append the path to parse_failures on a parser limit."""
     if not any(check.text_checks or check.ast_checks for check in checks):
         return []
     text = read_text(path)
@@ -93,21 +96,32 @@ def run_file_checks(checks: list[Check], path: Path, relative: str) -> list[Find
             findings.extend(text_check(path, relative, text))
     ast_checks = [ast_check for check in checks for ast_check in check.ast_checks]
     if ast_checks and path.suffix in PYTHON_SUFFIXES:
-        tree = parse_python(path, text)
+        tree, hit_limit = parse_python_status(path, text)
+        if hit_limit and parse_failures is not None:
+            parse_failures.append(relative)
         if tree is not None:
             for ast_check in ast_checks:
                 findings.extend(ast_check(relative, tree))
     return findings
 
 
-def run_checks(names: list[str], paths: list[Path], root: Path, changed: list[str] | None = None) -> list[Finding]:
-    """Run the named checks over the given paths and return sorted findings."""
+def run_checks(
+    names: list[str],
+    paths: list[Path],
+    root: Path,
+    changed: list[str] | None = None,
+    parse_failures: list[str] | None = None,
+) -> list[Finding]:
+    """Run the named checks over the given paths and return sorted findings.
+
+    A caller-supplied parse_failures list receives the relative paths whose parse hit a parser limit.
+    """
     checks = [CHECKS[name] for name in names]
     files = collect_files(paths, root)
     relatives = [relative_name(path, root) for path in files]
     findings: list[Finding] = []
     for path, relative in zip(files, relatives):
-        findings.extend(run_file_checks(checks, path, relative))
+        findings.extend(run_file_checks(checks, path, relative, parse_failures))
     for check in checks:
         if check.project_check is not None:
             findings.extend(check.project_check(root, relatives, changed))
