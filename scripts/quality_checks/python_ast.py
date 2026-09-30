@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import ast
+import itertools
 from collections.abc import Iterator
+from typing import TypeGuard
 
 from .common import Finding
 
@@ -38,9 +40,12 @@ def is_placeholder_body(body: list[ast.stmt]) -> bool:
     for statement in body:
         if isinstance(statement, ast.Pass):
             continue
-        if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant):
-            if statement.value.value is Ellipsis or isinstance(statement.value.value, str):
-                continue
+        if (
+            isinstance(statement, ast.Expr)
+            and isinstance(statement.value, ast.Constant)
+            and (statement.value.value is Ellipsis or isinstance(statement.value.value, str))
+        ):
+            continue
         return False
     return True
 
@@ -49,7 +54,7 @@ def check_dead_code(relative: str, tree: ast.Module) -> list[Finding]:
     """Q5: statements after a terminal statement and constant-false branches."""
     findings = []
     for block in iter_blocks(tree):
-        for previous, statement in zip(block, block[1:]):
+        for previous, statement in itertools.pairwise(block):
             if isinstance(previous, TERMINAL_STATEMENTS):
                 findings.append(Finding(relative, statement.lineno, "Q5", "unreachable statement", False))
                 break
@@ -90,7 +95,7 @@ def check_iteration_mutation(relative: str, tree: ast.Module) -> list[Finding]:
             continue
         for statement in loop.body:
             for node in ast.walk(statement):
-                if mutates_name(node, name):
+                if isinstance(node, (ast.Call, ast.Delete)) and mutates_name(node, name):
                     message = f"'{name}' mutated while iterating over it"
                     findings.append(Finding(relative, node.lineno, "Q8", message, False))
     return findings
@@ -104,9 +109,13 @@ def calls_itself(function: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
         func = node.func
         if isinstance(func, ast.Name) and func.id == function.name:
             return True
-        if isinstance(func, ast.Attribute) and func.attr == function.name and isinstance(func.value, ast.Name):
-            if func.value.id in ("self", "cls"):
-                return True
+        if (
+            isinstance(func, ast.Attribute)
+            and func.attr == function.name
+            and isinstance(func.value, ast.Name)
+            and func.value.id in ("self", "cls")
+        ):
+            return True
     return False
 
 
@@ -130,10 +139,13 @@ def check_recursion(relative: str, tree: ast.Module) -> list[Finding]:
     """Q9: self-recursive functions without a compared depth parameter."""
     findings = []
     for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and calls_itself(node):
-            if not has_checked_depth(node):
-                message = f"'{node.name}' recurses without an enforced depth limit"
-                findings.append(Finding(relative, node.lineno, "Q9", message, False))
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and calls_itself(node)
+            and not has_checked_depth(node)
+        ):
+            message = f"'{node.name}' recurses without an enforced depth limit"
+            findings.append(Finding(relative, node.lineno, "Q9", message, False))
     return findings
 
 
@@ -144,6 +156,8 @@ def check_mutable_defaults(relative: str, tree: ast.Module) -> list[Finding]:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
             continue
         for default in [*node.args.defaults, *node.args.kw_defaults]:
+            if default is None:
+                continue
             is_literal = isinstance(default, (ast.List, ast.Dict, ast.Set))
             is_factory = (
                 isinstance(default, ast.Call)
@@ -231,9 +245,13 @@ def released_in_finally(scope: ast.AST, resource: str) -> bool:
             continue
         for statement in node.finalbody:
             for call in ast.walk(statement):
-                if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute):
-                    if call.func.attr in RELEASE_METHODS and ast.unparse(call.func.value) == resource:
-                        return True
+                if (
+                    isinstance(call, ast.Call)
+                    and isinstance(call.func, ast.Attribute)
+                    and call.func.attr in RELEASE_METHODS
+                    and ast.unparse(call.func.value) == resource
+                ):
+                    return True
     return False
 
 
@@ -334,7 +352,7 @@ def is_stub_body(body: list[ast.stmt]) -> bool:
     return has_placeholder and is_placeholder_body(body)
 
 
-def is_bare_not_implemented(node: ast.AST) -> bool:
+def is_bare_not_implemented(node: ast.AST) -> TypeGuard[ast.Raise]:
     """Return True for raise NotImplementedError without a message."""
     if not isinstance(node, ast.Raise) or node.exc is None:
         return False
@@ -371,17 +389,26 @@ def has_main_guard(tree: ast.Module) -> bool:
     return False
 
 
+def is_debugger_import(node: ast.AST) -> TypeGuard[ast.Import | ast.ImportFrom]:
+    """Return True for imports of pdb, ipdb, or pudb."""
+    if isinstance(node, ast.Import):
+        return any(alias.name in DEBUGGER_MODULES for alias in node.names)
+    return isinstance(node, ast.ImportFrom) and node.module in DEBUGGER_MODULES
+
+
 def check_debug_leftovers(relative: str, tree: ast.Module) -> list[Finding]:
     """M17: breakpoints, debugger imports, and print calls in library modules."""
     flag_prints = not has_main_guard(tree)
     findings = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.Import) and any(alias.name in DEBUGGER_MODULES for alias in node.names):
+        if is_debugger_import(node):
             findings.append(Finding(relative, node.lineno, "M17", "debugger import", False))
-        elif isinstance(node, ast.ImportFrom) and node.module in DEBUGGER_MODULES:
-            findings.append(Finding(relative, node.lineno, "M17", "debugger import", False))
-        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id == "breakpoint" or (flag_prints and node.func.id == "print"):
-                message = f"{node.func.id}() call left in code"
-                findings.append(Finding(relative, node.lineno, "M17", message, False))
+            continue
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and (node.func.id == "breakpoint" or (flag_prints and node.func.id == "print"))
+        ):
+            message = f"{node.func.id}() call left in code"
+            findings.append(Finding(relative, node.lineno, "M17", message, False))
     return findings

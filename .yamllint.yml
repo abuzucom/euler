@@ -1,0 +1,7 @@
+---
+extends: default
+
+rules:
+  # AGENTS.md caps lines at 120 characters.
+  line-length:
+    max: 120

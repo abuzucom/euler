@@ -94,7 +94,19 @@ every change to a class, a tier, a hard blocker, or the `VERDICT_JSON` schema.
 ## Checks
 
 Run `make check` for the full local suite. `.github/workflows/ci.yml` runs the
-same target on every pull request.
+same target on Python 3.11, 3.12, and 3.13 on every pull request.
+
+Run `make lint` for ruff, mypy, and yamllint. Install the tools first with
+`pip install --require-hashes -r requirements-dev.txt`. The `ci` workflow runs
+`make lint` in a separate job.
+
+Other workflows cover the time between pull requests:
+
+- `codeql.yml` scans the Python sources and the workflows on pull requests,
+  pushes to `main`, and a weekly schedule.
+- `scheduled-validation.yml` runs `make check` weekly and on manual dispatch.
+- `.github/dependabot.yml` opens weekly update PRs for the pinned actions and
+  lint tools.
 
 `scripts/check_quality_policy.py` validates `QUALITY.md`. The checker enforces
 these properties:

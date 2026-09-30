@@ -265,6 +265,22 @@ class UnpinnedCheckTest(CheckerCase):
         self.assert_clean("unpinned", "D1", files)
 
 
+class HashedRequirementsCheckTest(CheckerCase):
+    def test_hashed_pins_clean(self) -> None:
+        requirements = (
+            "ruff==0.16.9 \\\n"
+            "    --hash=sha256:" + "a" * 64 + " \\\n"
+            "    --hash=sha256:" + "b" * 64 + "\n"
+            "mypy==2.3.1 \\\n"
+            "    --hash=sha256:" + "c" * 64 + "\n"
+        )
+        self.assert_clean("unpinned", "D1", {"requirements-dev.txt": requirements})
+
+    def test_hashed_range_flagged(self) -> None:
+        requirements = "ruff>=0.16 \\\n    --hash=sha256:" + "a" * 64 + "\n"
+        self.assert_flags("unpinned", "D1", {"requirements-dev.txt": requirements})
+
+
 class LockfileDriftCheckTest(CheckerCase):
     def test_manifest_without_lockfile(self) -> None:
         self.assert_flags("lockfile-drift", "D2", {"package.json": '{"dependencies": {"a": "1.0.0"}}'})
@@ -289,6 +305,10 @@ class UnusedDepsCheckTest(CheckerCase):
 
     def test_js_declared_and_imported_clean(self) -> None:
         files = {"package.json": '{"dependencies": {"lodash": "4.17.21"}}', "a.js": "import _ from 'lodash';\n"}
+        self.assert_clean("unused-deps", "D5", files)
+
+    def test_dev_requirements_not_runtime_declarations(self) -> None:
+        files = {"requirements-dev.txt": "ruff==0.16.9\n", "app.py": "import json\n"}
         self.assert_clean("unused-deps", "D5", files)
 
     def test_python_mapped_name_clean(self) -> None:

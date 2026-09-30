@@ -1,3 +1,4 @@
+---
 name: quality-review-pr
 
 # Runs the euler quality review on this repository's pull requests. The
@@ -5,20 +6,22 @@ name: quality-review-pr
 # request files stay review data. Fork pull requests receive an explicit skip
 # result and no secret.
 
-on:
+"on":
   workflow_run:
     workflows: [ci]
     types: [completed]
 
+# Each job declares only the permissions it uses.
 permissions:
   contents: read
-  pull-requests: write
-  checks: write
 
 jobs:
   resolve:
     if: github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       found: ${{ steps.pr.outputs.found }}
       same_repo: ${{ steps.pr.outputs.same_repo }}
@@ -30,7 +33,7 @@ jobs:
     steps:
       - name: Resolve pull request from the head revision
         id: pr
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
         env:
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         with:
@@ -44,7 +47,8 @@ jobs:
             }
             const pull = matches[0];
             core.setOutput('found', 'true');
-            core.setOutput('same_repo', String(pull.head.repo && pull.head.repo.full_name === pull.base.repo.full_name));
+            const sameRepo = Boolean(pull.head.repo) && pull.head.repo.full_name === pull.base.repo.full_name;
+            core.setOutput('same_repo', String(sameRepo));
             core.setOutput('number', String(pull.number));
             core.setOutput('base_sha', pull.base.sha);
             core.setOutput('head_sha', pull.head.sha);
@@ -53,6 +57,10 @@ jobs:
 
   review:
     needs: resolve
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
     if: needs.resolve.outputs.found == 'true' && needs.resolve.outputs.same_repo == 'true'
     uses: ./.github/workflows/quality-review.yml
     with:
@@ -72,9 +80,11 @@ jobs:
     needs: resolve
     if: needs.resolve.outputs.found == 'true' && needs.resolve.outputs.same_repo != 'true'
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
     steps:
       - name: Publish skip result
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
         env:
           HEAD_SHA: ${{ needs.resolve.outputs.head_sha }}
         with:
@@ -85,5 +95,8 @@ jobs:
               head_sha: process.env.HEAD_SHA,
               status: 'completed',
               conclusion: 'skipped',
-              output: { title: 'Skipped for fork pull request', summary: 'Fork pull requests receive no provider secret.' },
+              output: {
+                title: 'Skipped for fork pull request',
+                summary: 'Fork pull requests receive no provider secret.',
+              },
             });

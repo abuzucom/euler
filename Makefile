@@ -1,4 +1,4 @@
-.PHONY: check test policy quality eval
+.PHONY: check test policy quality eval lint
 
 # Overridable for platforms without this interpreter name:
 #   make check PYTHON=py
@@ -17,6 +17,12 @@ quality:
 
 eval:
 	$(PYTHON) eval/run_eval.py
+
+# Needs the tools from requirements-dev.txt. make check stays standard-library only.
+lint:
+	$(PYTHON) -m ruff check scripts ci eval/run_eval.py tests
+	$(PYTHON) -m mypy
+	$(PYTHON) -m yamllint --strict .github .yamllint.yml
 
 test:
 	$(PYTHON) -m unittest discover -s tests

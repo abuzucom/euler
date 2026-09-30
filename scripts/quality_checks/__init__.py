@@ -86,8 +86,9 @@ def run_file_checks(checks: list[Check], path: Path, relative: str) -> list[Find
     ast_checks = [ast_check for check in checks for ast_check in check.ast_checks]
     if ast_checks and path.suffix in PYTHON_SUFFIXES:
         tree = parse_python(path, text)
-        for ast_check in ast_checks if tree is not None else []:
-            findings.extend(ast_check(relative, tree))
+        if tree is not None:
+            for ast_check in ast_checks:
+                findings.extend(ast_check(relative, tree))
     return findings
 
 

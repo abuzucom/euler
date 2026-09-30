@@ -6,6 +6,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.3.0] (2026-09-30)
+
+### Added
+
+- Added `codeql.yml` for CodeQL scanning of Python and GitHub Actions.
+- Added `scheduled-validation.yml` for a weekly `make check`.
+- Added `.github/dependabot.yml` for weekly action and lint tool updates.
+- Added `make lint` with ruff, mypy, and yamllint pinned by hash in
+  `requirements-dev.txt`. The `ci` workflow runs it in a `lint` job.
+- Added a Python 3.11, 3.12, and 3.13 matrix to the `ci` checks job.
+
+### Changed
+
+- Moved write permissions to job level in `quality-review-pr.yml` and
+  `security-review-pr.yml`.
+- Fixed D1 to read hash-format requirement files with line continuations.
+- Limited D5 runtime declarations to `requirements.txt` and `pyproject.toml`.
+- Fixed ruff and mypy findings in the checker code. Marked the command line
+  scripts executable.
+
 ## [0.2.0] (2026-09-30)
 
 ### Added
