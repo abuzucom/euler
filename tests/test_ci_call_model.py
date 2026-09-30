@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import sys
 import tempfile
@@ -199,6 +201,20 @@ class PostJsonTest(unittest.TestCase):
             call_model.post_json("https://ollama.com/api/chat", {}, {}, connection_factory=failing_factory)
         self.assertIn("503", str(context.exception))
         self.assertTrue(FakeConnection.instances[0].closed)
+
+    def test_http_error_body_kept_out_of_message(self) -> None:
+        def failing_factory(host: str, port: int, timeout: float) -> FakeConnection:
+            connection = FakeConnection(host, port, timeout)
+            connection.response = FakeResponse(402, b"org acme-corp quota exhausted\n::set-output name=x::y")
+            return connection
+
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr), self.assertRaises(call_model.ModelCallError) as context:
+            call_model.post_json("https://ollama.com/api/chat", {}, {}, connection_factory=failing_factory)
+        self.assertIn("402", str(context.exception))
+        self.assertNotIn("acme-corp", str(context.exception))
+        self.assertIn("acme-corp", stderr.getvalue())
+        self.assertFalse([line for line in stderr.getvalue().splitlines() if line.startswith("::")])
 
     def test_network_error_raises(self) -> None:
         def broken_factory(host: str, port: int, timeout: float) -> FakeConnection:

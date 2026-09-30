@@ -22,6 +22,9 @@ GIT_ENV = {
     "GIT_COMMITTER_NAME": "Test",
     "GIT_COMMITTER_EMAIL": "test@example.com",
 }
+EVIL_SOURCE = "import os\n\ntry:\n    os.system(input())\nexcept ValueError:\n    pass\n"
+# A long unary chain exhausts the Python parser on 3.11 and 3.12.
+DEEP_PYTHON = "x = " + "-" * 100_000 + "1\n"
 
 
 class GitRepoCase(unittest.TestCase):
@@ -130,6 +133,58 @@ class BuildTest(GitRepoCase):
         base = self.commit({"a.txt": "x\n"})
         with self.assertRaises(ValueError):
             self.build(base, "HEAD; rm -rf /")
+
+    def test_filename_with_space_keeps_patch(self) -> None:
+        base = self.commit({"a.txt": "x\n"})
+        head = self.commit({"src/evil helper.py": EVIL_SOURCE})
+        out_dir = self.build(base, head)
+        envelope = json.loads((out_dir / "envelopes" / "001.json").read_text(encoding="utf-8"))
+        self.assertIn("os.system(input())", envelope["REVIEW_TARGET"]["files"]["src/evil helper.py"])
+        prescan = json.loads((out_dir / "prescan.json").read_text(encoding="utf-8"))
+        self.assertTrue(any(item["file"] == "src/evil helper.py" and item["blocking"] for item in prescan))
+
+    def test_non_ascii_filename_keeps_patch(self) -> None:
+        name = "café.py"
+        base = self.commit({"a.txt": "x\n"})
+        head = self.commit({name: EVIL_SOURCE})
+        out_dir = self.build(base, head)
+        envelope = json.loads((out_dir / "envelopes" / "001.json").read_text(encoding="utf-8"))
+        self.assertIn("os.system(input())", envelope["REVIEW_TARGET"]["files"][name])
+        prescan = json.loads((out_dir / "prescan.json").read_text(encoding="utf-8"))
+        self.assertTrue(any(item["file"] == name and item["blocking"] for item in prescan))
+
+    def test_non_utf8_filename_listed_unreviewed(self) -> None:
+        base = self.commit({"a.txt": "x\n"})
+        (self.repo / os.fsdecode(b"bad\xff.py")).write_text(EVIL_SOURCE, encoding="utf-8")
+        head = self.commit({})
+        manifest = json.loads((self.build(base, head) / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["unreviewed"], ["bad�.py"])
+        self.assertEqual(manifest["chunks"], [])
+
+    def test_empty_patch_split_out(self) -> None:
+        patches, empty = build_pr_case.split_empty_patches({"a.py": "+x\n", "b.py": ""})
+        self.assertEqual(patches, {"a.py": "+x\n"})
+        self.assertEqual(empty, ["b.py"])
+
+    def test_export_ignore_does_not_hide_file(self) -> None:
+        base = self.commit({"a.txt": "x\n"})
+        head = self.commit({".gitattributes": "evil.py export-ignore\n", "evil.py": EVIL_SOURCE})
+        prescan = json.loads((self.build(base, head) / "prescan.json").read_text(encoding="utf-8"))
+        self.assertTrue(any(item["file"] == "evil.py" and item["class"] == "M1" for item in prescan))
+
+    def test_chunks_over_limit_listed_unreviewed(self) -> None:
+        base = self.commit({"a.txt": "x\n"})
+        head = self.commit({"one.py": "A = 1\n" * 40, "two.py": "B = 1\n" * 40})
+        out_dir = self.build(base, head, max_chars=400, max_chunks=1)
+        manifest = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(manifest["chunks"]), 1)
+        self.assertEqual(manifest["unreviewed"], ["two.py"])
+
+    def test_parser_limit_file_listed_unreviewed(self) -> None:
+        base = self.commit({"a.txt": "x\n"})
+        head = self.commit({"deep.py": DEEP_PYTHON})
+        manifest = json.loads((self.build(base, head) / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["unreviewed"], ["deep.py"])
 
     def test_parse_added_lines(self) -> None:
         patch = "@@ -1,2 +1,3 @@\n a\n-b\n+c\n+d\n@@ -10 +11,2 @@\n x\n+y\n"

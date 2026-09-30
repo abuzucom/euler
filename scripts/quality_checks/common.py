@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import ast
 import sys
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
 PYTHON_SUFFIXES = frozenset({".py"})
+TOML_SUFFIX = ".toml"
+# Deeply nested input exhausts the parsers with these errors instead of a syntax error.
+PARSER_LIMIT_ERRORS = (RecursionError, MemoryError)
 JS_SUFFIXES = frozenset({".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"})
 SOURCE_SUFFIXES = (
     PYTHON_SUFFIXES
@@ -82,12 +86,34 @@ def read_text(path: Path) -> str | None:
 
 
 def parse_python(path: Path, text: str) -> ast.Module | None:
-    """Return the parsed module, or None with a warning on a syntax error."""
+    """Return the parsed module, or None with a warning on a syntax error or a parser limit."""
     try:
         return ast.parse(text, filename=str(path))
     except SyntaxError as error:
         sys.stderr.write(f"warning: skipped {path}: {error}. Fix the syntax error to check the file.\n")
-        return None
+    except PARSER_LIMIT_ERRORS as error:
+        sys.stderr.write(f"warning: skipped {path}: {type(error).__name__}. Reduce the nesting to check the file.\n")
+    return None
+
+
+def exceeds_parser_limits(path: Path) -> bool:
+    """Return True when the Python or TOML parser runs out of recursion depth or memory on the file."""
+    if path.suffix not in PYTHON_SUFFIXES and path.suffix != TOML_SUFFIX:
+        return False
+    text = read_text(path)
+    if text is None:
+        return False
+    try:
+        if path.suffix == TOML_SUFFIX:
+            tomllib.loads(text)
+        else:
+            ast.parse(text, filename=str(path))
+    except PARSER_LIMIT_ERRORS:
+        return True
+    except (SyntaxError, tomllib.TOMLDecodeError):
+        # Syntax errors keep the existing warn-and-skip behavior of the checkers.
+        return False
+    return False
 
 
 def line_of_offset(text: str, offset: int) -> int:

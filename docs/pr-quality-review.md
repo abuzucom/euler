@@ -30,10 +30,18 @@ a report with a machine-readable verdict. The check fails on `BLOCK` or
 ## Envelope and prescan
 
 `ci/build_pr_case.py` reads the diff and the head tree from git objects. The
-builder extracts the head tree with the tarfile data filter. It runs
-`scripts/check_code_quality.py` checks on changed files. It keeps candidates
-on added lines. Project-level classes C3, D2, and D5 keep candidates in
-changed files.
+builder reads changed paths as NUL-separated output. It passes each path to
+git as a literal pathspec. A path with spaces, quotes, or non-ASCII characters
+keeps its full patch.
+
+The builder writes the head tree's regular files from `git ls-tree` and
+`git cat-file` output. The head commit's `export-ignore` and `export-subst`
+attributes have no effect on the scanned tree. The builder skips symlinks and
+submodules.
+
+The builder runs `scripts/check_code_quality.py` checks on changed files. It
+keeps candidates on added lines. Project-level classes C3, D2, and D5 keep
+candidates in changed files.
 
 The envelope from `scripts/review_envelope.py` holds two channels:
 
@@ -48,10 +56,24 @@ item in the `prescan` array of `VERDICT_JSON`.
 - The worst chunk verdict wins. BLOCK outranks NEEDS-HUMAN. NEEDS-HUMAN
   outranks APPROVE.
 - A blocking prescan finding from Q11, M1, M12, or M13 forces BLOCK.
-- A binary file or a file over the chunk budget becomes an unreviewed file.
-  Unreviewed files force NEEDS-HUMAN.
-- A model call failure forces NEEDS-HUMAN for that chunk.
+- These files become unreviewed files:
+  - a binary file
+  - a file over the chunk budget
+  - a file in a chunk past `--max-chunks`, 20 by default
+  - a path that is not valid UTF-8
+  - a text file with an empty patch
+  - a Python or TOML file that exhausts parser recursion depth or memory
+- Unreviewed files force NEEDS-HUMAN.
+- A model call failure forces NEEDS-HUMAN for that chunk. The comment omits the
+  provider error body. The job log holds it.
 - A report failing validation twice forces NEEDS-HUMAN for that chunk.
+
+## PR comment
+
+The comment places the blocking prescan list, the unreviewed file list, the
+validation problems, and each model report inside code fences. Pull request
+paths and model text cannot render as markdown, images, links, or mentions.
+Each list shows at most 50 items of at most 300 characters.
 
 ## Trust boundary
 

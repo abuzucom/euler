@@ -9,7 +9,15 @@ import sys
 import tomllib
 from pathlib import Path
 
-from .common import JS_SUFFIXES, PYTHON_SUFFIXES, SOURCE_SUFFIXES, Finding, is_test_path, read_text
+from .common import (
+    JS_SUFFIXES,
+    PARSER_LIMIT_ERRORS,
+    PYTHON_SUFFIXES,
+    SOURCE_SUFFIXES,
+    Finding,
+    is_test_path,
+    read_text,
+)
 
 EXACT_SEMVER = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -71,7 +79,9 @@ def load_toml(path: Path) -> dict:
         return tomllib.loads(text or "")
     except tomllib.TOMLDecodeError as error:
         sys.stderr.write(f"warning: skipped {path}: {error}. Fix the TOML syntax to check it.\n")
-        return {}
+    except PARSER_LIMIT_ERRORS as error:
+        sys.stderr.write(f"warning: skipped {path}: {type(error).__name__}. Reduce the nesting to check it.\n")
+    return {}
 
 
 def load_json(path: Path) -> dict:

@@ -7,6 +7,8 @@ purpose. The repository self-scan skips tests/ for that reason.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import subprocess
 import sys
@@ -21,6 +23,10 @@ import quality_checks  # resolved through the path set above
 
 MARKER = "TO" + "DO"
 NOQA = "# no" + "qa"
+# Nesting deep enough to exhaust the Python and TOML parsers.
+DEEP_PYTHON = "x = " + "-" * 100_000 + "1\n"
+TOML_DEPTH = 5_000
+DEEP_TOML = "a = " + "[" * TOML_DEPTH + "]" * TOML_DEPTH + "\n"
 
 
 class CheckerCase(unittest.TestCase):
@@ -320,6 +326,28 @@ class UnusedDepsCheckTest(CheckerCase):
     def test_python_mapped_name_clean(self) -> None:
         files = {"requirements.txt": "PyYAML==6.0.2\n", "app.py": "import yaml\n"}
         self.assert_clean("unused-deps", "D5", files)
+
+
+class ParserLimitTest(CheckerCase):
+    def test_deep_python_skipped_without_crash(self) -> None:
+        paths = self.write_files({"deep.py": DEEP_PYTHON})
+        with contextlib.redirect_stderr(io.StringIO()):
+            findings = quality_checks.run_checks(list(quality_checks.CHECKS), paths, self.root)
+            self.assertTrue(quality_checks.exceeds_parser_limits(paths[0]))
+        self.assertEqual(findings, [])
+
+    def test_deep_toml_skipped_without_crash(self) -> None:
+        paths = self.write_files({"pyproject.toml": DEEP_TOML})
+        with contextlib.redirect_stderr(io.StringIO()):
+            findings = quality_checks.run_checks(["unpinned", "unused-deps"], paths, self.root)
+            self.assertTrue(quality_checks.exceeds_parser_limits(paths[0]))
+        self.assertEqual(findings, [])
+
+    def test_syntax_error_within_parser_limits(self) -> None:
+        paths = self.write_files({"broken.py": "def f(:\n", "ok.toml": "a = 1\n"})
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertFalse(quality_checks.exceeds_parser_limits(paths[0]))
+        self.assertFalse(quality_checks.exceeds_parser_limits(paths[1]))
 
 
 class CommandLineTest(CheckerCase):

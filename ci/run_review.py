@@ -40,6 +40,9 @@ JSON_INDENT = 2
 # One first attempt plus one retry after a validation failure.
 MAX_ATTEMPTS = 2
 REPORT_MARKER = "<!-- euler-quality-review -->"
+# Caps keep the comment under GitHub's 65536-character body limit.
+MAX_LISTED_ITEMS = 50
+MAX_ITEM_CHARS = 300
 
 ModelCall = Callable[[str, str, str], str]
 
@@ -96,6 +99,18 @@ def fence(text: str) -> str:
     return f"{marker}text\n{text.rstrip()}\n{marker}"
 
 
+def fenced_list(items: list[str]) -> str:
+    """Return capped items one per line inside a fence.
+
+    Paths, prescan messages, and validation problems carry pull request or model text. A fence keeps that
+    text from rendering as markdown in the posted comment.
+    """
+    shown = [" ".join(item.split())[:MAX_ITEM_CHARS] for item in items[:MAX_LISTED_ITEMS]]
+    if len(items) > MAX_LISTED_ITEMS:
+        shown.append(f"... and {len(items) - MAX_LISTED_ITEMS} more")
+    return fence("\n".join(shown))
+
+
 def final_verdict(chunks: list[ChunkResult], prescan: list[dict], unreviewed: list[str]) -> str:
     """Merge chunk verdicts with prescan blockers and coverage."""
     verdicts = [chunk.verdict for chunk in chunks]
@@ -115,15 +130,17 @@ def render_report(manifest: dict, chunks: list[ChunkResult], prescan: list[dict]
     lines.append(f"Base `{manifest['base_sha']}`. Head `{manifest['head_sha']}`.")
     if run_id:
         lines.append(f"Workflow run: {server}/{repository}/actions/runs/{run_id}")
-    blocking = [item for item in prescan if item.get("blocking")]
+    blocking = [
+        f"{item['file']}:{item['line']} {item['class']}: {item['message']}" for item in prescan if item.get("blocking")
+    ]
     if blocking:
-        lines += ["", "### Blocking prescan findings", ""]
-        lines += [f"- `{item['file']}:{item['line']}` {item['class']}: {item['message']}" for item in blocking]
+        lines += ["", "### Blocking prescan findings", "", fenced_list(blocking)]
     if manifest["unreviewed"]:
-        lines += ["", "### Unreviewed files", ""] + [f"- `{path}`" for path in manifest["unreviewed"]]
+        lines += ["", "### Unreviewed files", "", fenced_list(manifest["unreviewed"])]
     for chunk in chunks:
         lines += ["", f"### Chunk {chunk.envelope}: {chunk.verdict}", ""]
-        lines += [f"- Validation: {problem}" for problem in chunk.problems]
+        if chunk.problems:
+            lines += ["Validation problems:", "", fenced_list(chunk.problems)]
         if chunk.report:
             lines += ["", fence(chunk.report)]
     return "\n".join(lines) + "\n"

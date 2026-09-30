@@ -6,6 +6,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.4.1] (2026-09-30)
+
+### Fixed
+
+- `ci/build_pr_case.py` reads changed paths with `git diff -z` and passes
+  them as literal pathspecs. A file name with spaces or non-ASCII characters
+  no longer hides its patch from the model and the prescan.
+- A path that is not valid UTF-8 and a text file with an empty patch become
+  unreviewed files.
+- The prescan reads head blobs with `git ls-tree` and `git cat-file`. A
+  `.gitattributes` `export-ignore` entry in the pull request no longer hides
+  files from the prescan.
+- `ci/build_pr_case.py` takes an optional `--max-chunks`, 20 by default.
+  Files in chunks past the limit become unreviewed files.
+- `ci/run_review.py` fences the blocking prescan list, the unreviewed list,
+  and the validation problems in the PR comment. Each list shows at most 50
+  items of at most 300 characters.
+- `ci/call_model.py` writes the provider error body to the job log only. The
+  `ModelCallError` message keeps the HTTP status.
+- The checkers skip a Python or TOML file that raises `RecursionError` or
+  `MemoryError` with a warning. The PR builder lists such a file as
+  unreviewed.
+
 ## [0.4.0] (2026-09-30)
 
 ### Changed
