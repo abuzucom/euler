@@ -51,6 +51,11 @@ name: quality-review
         required: false
         type: string
         default: ""
+      max_chunks:
+        description: "Maximum review envelopes. Files past the limit become unreviewed and force NEEDS-HUMAN."
+        required: false
+        type: number
+        default: 20
     secrets:
       MODEL_API_KEY:
         required: true
@@ -63,6 +68,8 @@ permissions:
 jobs:
   review:
     runs-on: ubuntu-latest
+    # 20 chunks at up to two model calls each finish well inside this bound.
+    timeout-minutes: 45
     concurrency:
       group: quality-review-${{ github.repository }}-${{ inputs.pr_number }}
       cancel-in-progress: true
@@ -97,10 +104,12 @@ jobs:
           PR_TITLE: ${{ inputs.pr_title }}
           PR_BODY: ${{ inputs.pr_body }}
           EXCLUDE_PATHS: ${{ inputs.exclude_paths }}
+          MAX_CHUNKS: ${{ inputs.max_chunks }}
         run: >-
           python3 .euler/ci/build_pr_case.py
           --repo . --base "$BASE_SHA" --head "$HEAD_SHA"
           --pr-number "$PR_NUMBER" --exclude "$EXCLUDE_PATHS"
+          --max-chunks "$MAX_CHUNKS"
           --out-dir "$RUNNER_TEMP/review"
 
       - name: Run model review
