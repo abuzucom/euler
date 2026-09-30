@@ -1,0 +1,12 @@
+diff --git a/app/ratings.py b/app/ratings.py
+new file mode 100644
+--- /dev/null
++++ b/app/ratings.py
+@@ -0,0 +1,7 @@
++def average_rating(reviews):
++    total = sum(review.stars for review in reviews)
++    return total / len(reviews)
++
++
++def rating_summary(product):
++    return {"id": product.id, "average": average_rating(product.reviews)}

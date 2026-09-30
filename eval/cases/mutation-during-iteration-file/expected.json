@@ -1,0 +1,9 @@
+{
+  "mode": "File",
+  "expected_verdict": "RISK: HIGH",
+  "expected_classes": [
+    "Q8"
+  ],
+  "expect_json": false,
+  "notes": "prune_expired removes items from sessions while iterating over it. The loop skips the element after each removal. Expired sessions survive. Wrong results rate HIGH."
+}

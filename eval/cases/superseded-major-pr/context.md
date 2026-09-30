@@ -1,0 +1,1 @@
+Ports the legacy sync script unchanged. The script relies on request's callback API.

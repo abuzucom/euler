@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "NEEDS-HUMAN",
+  "expected_classes": [
+    "D1"
+  ],
+  "expect_json": true,
+  "notes": "package.json adds a caret range. The workflow references an action by tag. D1 is Escalate."
+}

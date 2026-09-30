@@ -1,0 +1,9 @@
+{
+  "mode": "File",
+  "expected_verdict": "RISK: MEDIUM",
+  "expected_classes": [
+    "M18"
+  ],
+  "expect_json": false,
+  "notes": "The client embeds an internal staging host. Production traffic reaches staging. M18 rates MEDIUM."
+}

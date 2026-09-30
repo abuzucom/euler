@@ -1,0 +1,1 @@
+Allows requests exactly at the limit.

@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "BLOCK",
+  "expected_classes": [
+    "Q2"
+  ],
+  "expect_json": true,
+  "notes": "current_user lives in a module-level variable inside a threaded Flask app. Concurrent requests overwrite it. One user's orders reach another user. Q2 rates HIGH for a cross-user leak. HIGH gives BLOCK."
+}

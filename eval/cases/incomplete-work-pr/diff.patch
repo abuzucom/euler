@@ -1,0 +1,14 @@
+diff --git a/billing/refunds.py b/billing/refunds.py
+new file mode 100644
+--- /dev/null
++++ b/billing/refunds.py
+@@ -0,0 +1,9 @@
++def refund(payment, amount):
++    if amount == payment.amount:
++        return payment.reverse()
++    # TODO: support partial refunds
++    return partial_refund(payment, amount)
++
++
++def partial_refund(payment, amount):
++    pass

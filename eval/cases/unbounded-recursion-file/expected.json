@@ -1,0 +1,9 @@
+{
+  "mode": "File",
+  "expected_verdict": "RISK: HIGH",
+  "expected_classes": [
+    "Q9"
+  ],
+  "expect_json": false,
+  "notes": "flatten recurses over a JSON document from the request body with no depth limit. A deeply nested payload exhausts the stack. External input controls the depth. Q9 rates HIGH."
+}

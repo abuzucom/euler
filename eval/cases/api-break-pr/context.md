@@ -1,0 +1,1 @@
+Renames the parameter for clarity. lib/search.py is part of the published package API.

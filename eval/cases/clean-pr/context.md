@@ -1,0 +1,1 @@
+Adds an initials helper for avatars.

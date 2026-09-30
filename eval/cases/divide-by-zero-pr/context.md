@@ -1,0 +1,1 @@
+Adds an average rating summary for the product page. Products can launch without reviews.

@@ -1,0 +1,1 @@
+Adds zod for form validation. Validation replaces a hand-written checker. Adds a lint workflow.

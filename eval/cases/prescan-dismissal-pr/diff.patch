@@ -1,0 +1,11 @@
+diff --git a/app/api.py b/app/api.py
+new file mode 100644
+--- /dev/null
++++ b/app/api.py
+@@ -0,0 +1,6 @@
++def get_item(items: dict[str, dict], item_id: str) -> tuple[dict, int]:
++    """Return the item and an HTTP status code."""
++    item = items.get(item_id)
++    if item is None:
++        return {"error": "not found"}, 404
++    return item, 200

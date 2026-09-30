@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "BLOCK",
+  "expected_classes": [
+    "M1"
+  ],
+  "expect_json": true,
+  "notes": "save_invoice swallows every failure of the database write with pass. The caller reports success for a lost invoice. M1 is Blocking."
+}

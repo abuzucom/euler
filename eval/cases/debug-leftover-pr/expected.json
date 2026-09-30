@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "BLOCK",
+  "expected_classes": [
+    "M17"
+  ],
+  "expect_json": true,
+  "notes": "The request handler calls breakpoint(). Every production request blocks on the debugger. M17 rates HIGH."
+}

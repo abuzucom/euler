@@ -1,0 +1,14 @@
+diff --git a/etl/export.py b/etl/export.py
+new file mode 100644
+--- /dev/null
++++ b/etl/export.py
+@@ -0,0 +1,9 @@
++import csv
++
++
++def export_rows(path, rows):
++    handle = open(path, "w", newline="")
++    writer = csv.writer(handle)
++    for row in rows:
++        writer.writerow(row.values())
++    handle.close()

@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "NEEDS-HUMAN",
+  "expected_classes": [
+    "D3"
+  ],
+  "expect_json": true,
+  "notes": "The PR adds lodash to call one function that the standard library covers. The PR text gives no rationale. D3 is Escalate."
+}

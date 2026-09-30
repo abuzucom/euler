@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "NEEDS-HUMAN",
+  "expected_classes": [
+    "C2"
+  ],
+  "expect_json": true,
+  "notes": "The PR widens the tolerance from 0.01 to 5.0 and deletes the negative-amount test. The change hides a behavior change in convert. C2 is Escalate."
+}

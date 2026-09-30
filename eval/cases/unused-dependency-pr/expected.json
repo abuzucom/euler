@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "APPROVE",
+  "expected_classes": [
+    "D5"
+  ],
+  "expect_json": true,
+  "notes": "The PR removes the last import of arrow. requirements.txt still declares arrow. D5 flags the unused declaration at LOW. LOW does not block."
+}

@@ -1,0 +1,9 @@
+{
+  "mode": "File",
+  "expected_verdict": "RISK: HIGH",
+  "expected_classes": [
+    "M14"
+  ],
+  "expect_json": false,
+  "notes": "The docstring promises a None return for a missing key. The code raises KeyError. Callers relying on the docstring crash. M14 rates HIGH."
+}

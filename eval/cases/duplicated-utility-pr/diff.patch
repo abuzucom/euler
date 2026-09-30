@@ -1,0 +1,12 @@
+diff --git a/blog/text.py b/blog/text.py
+--- a/blog/text.py
++++ b/blog/text.py
+@@ -4,3 +4,8 @@
+ def slugify(value):
+     value = re.sub(r"[^a-z0-9]+", "-", value.lower())
+     return value.strip("-")
++
++
++def slugify_title(title):
++    title = re.sub(r"[^a-z0-9]+", "-", title.lower())
++    return title.strip("-")

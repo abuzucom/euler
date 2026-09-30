@@ -1,0 +1,22 @@
+diff --git a/app/text.py b/app/text.py
+new file mode 100644
+--- /dev/null
++++ b/app/text.py
+@@ -0,0 +1,3 @@
++def initials(full_name: str) -> str:
++    """Return the uppercase initials of a full name."""
++    return "".join(part[0].upper() for part in full_name.split() if part)
+diff --git a/tests/test_text.py b/tests/test_text.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_text.py
+@@ -0,0 +1,9 @@
++from app.text import initials
++
++
++def test_initials():
++    assert initials("ada lovelace") == "AL"
++
++
++def test_initials_empty():
++    assert initials("") == ""

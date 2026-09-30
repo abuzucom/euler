@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "BLOCK",
+  "expected_classes": [
+    "Q12"
+  ],
+  "expect_json": true,
+  "notes": "requests.get accepts no retries keyword. The call raises TypeError on every request. requirements.txt pins requests 2.32.3. Q12 is Blocking."
+}

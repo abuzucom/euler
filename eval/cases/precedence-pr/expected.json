@@ -1,0 +1,10 @@
+{
+  "mode": "PR",
+  "expected_verdict": "BLOCK",
+  "expected_classes": [
+    "M1",
+    "C2"
+  ],
+  "expect_json": true,
+  "notes": "The PR swallows a write failure and deletes the test that covered it. M1 gives BLOCK. C2 gives NEEDS-HUMAN. BLOCK outranks NEEDS-HUMAN. The report lists both findings."
+}

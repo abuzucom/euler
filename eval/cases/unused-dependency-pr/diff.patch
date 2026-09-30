@@ -1,0 +1,12 @@
+diff --git a/app/dates.py b/app/dates.py
+--- a/app/dates.py
++++ b/app/dates.py
+@@ -1,5 +1,6 @@
+-import arrow
++from datetime import datetime, timezone
+ 
+ 
+ def humanize(moment):
+-    return arrow.get(moment).humanize()
++    delta = datetime.now(timezone.utc) - moment
++    return f"{delta.days} days ago"

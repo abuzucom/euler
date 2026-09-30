@@ -1,0 +1,9 @@
+{
+  "mode": "File",
+  "expected_verdict": "RISK: HIGH",
+  "expected_classes": [
+    "Q1"
+  ],
+  "expect_json": false,
+  "notes": "coupon_code reads user.profile.coupon before the None guard that protects it. The guard sits after the use. shipping_fee re-tests weight_kg < 0 after the <= 0 raise ruled that state out. Q1 is Blocking. File mode rates it HIGH."
+}

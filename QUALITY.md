@@ -30,6 +30,7 @@ Apply diff, history, and manifest rules in PR mode. In other modes, inspect the 
   - **Graded.** Rate each finding. HIGH gives BLOCK.
   - **Advisory.** Always LOW. Never affects the verdict.
   - **+script.** A deterministic prescan also covers the class. Section 7 governs prescan handling.
+  - In File, Piece, and Wholesale modes, Blocking and Escalate findings rate HIGH.
 6. **Declare context.** State the mode, the visible material, and the unseen material. Never infer quality from
   unseen code.
 7. **Specify fixes.** Recommend a concrete, stack-appropriate fix for every finding.

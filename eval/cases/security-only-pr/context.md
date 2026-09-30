@@ -1,0 +1,1 @@
+Adds a customer lookup by email.

@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "BLOCK",
+  "expected_classes": [
+    "Q14"
+  ],
+  "expect_json": true,
+  "notes": "The migration inserts default plans without an existence guard. A second run duplicates every plan row. Q14 rates HIGH for duplicated data."
+}

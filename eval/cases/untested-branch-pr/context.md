@@ -1,0 +1,1 @@
+Deletes accounts when support closes them.

@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "BLOCK",
+  "expected_classes": [
+    "M12"
+  ],
+  "expect_json": true,
+  "notes": "refund leaves a deferred-work marker and a stub body for partial refunds. The code path returns None for partial amounts. M12 is Blocking."
+}

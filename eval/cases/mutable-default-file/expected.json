@@ -1,0 +1,9 @@
+{
+  "mode": "File",
+  "expected_verdict": "RISK: HIGH",
+  "expected_classes": [
+    "Q13"
+  ],
+  "expect_json": false,
+  "notes": "add_tag uses a list default. Tags accumulate across calls and leak between unrelated records. Data corruption rates HIGH."
+}

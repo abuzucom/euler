@@ -1,0 +1,9 @@
+{
+  "mode": "File",
+  "expected_verdict": "RISK: LOW",
+  "expected_classes": [
+    "M15"
+  ],
+  "expect_json": false,
+  "notes": "render accepts a theme parameter and a strategy registry that nothing uses. The extra surface hides no defect. M15 rates LOW."
+}

@@ -1,0 +1,1 @@
+Caches the current user id to avoid repeated lookups of g.
