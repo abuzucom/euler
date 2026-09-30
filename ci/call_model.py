@@ -11,7 +11,9 @@ import json
 import os
 import urllib.error
 import urllib.request
+import warnings
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 ALLOWED_ENDPOINTS = frozenset({"https://ollama.com/api", "https://api.openai.com/v1", "https://api.anthropic.com/v1"})
@@ -101,22 +103,63 @@ def extract_text(protocol: str, response: dict) -> str:
 REQUEST_BUILDERS = {"ollama": ollama_request, "openai-compatible": openai_request, "anthropic": anthropic_request}
 
 
+@dataclass(frozen=True)
+class CallOptions:
+    """Optional overrides for one model call."""
+
+    transport: Transport | None = None
+    profile_path: Path | None = None
+    api_key: str | None = None
+
+
+LEGACY_OPTION_NAMES = ("transport", "profile_path", "api_key")
+
+
+def resolve_options(options: CallOptions | None, legacy_positional: tuple, legacy_keywords: dict) -> CallOptions:
+    """Return call options. Accept the pre-0.3.0 parameters with a DeprecationWarning."""
+    if len(legacy_positional) > len(LEGACY_OPTION_NAMES):
+        raise TypeError(f"call_model takes at most {len(LEGACY_OPTION_NAMES) + 3} positional arguments")
+    unknown = sorted(set(legacy_keywords) - set(LEGACY_OPTION_NAMES))
+    if unknown:
+        raise TypeError(f"call_model got unexpected keyword arguments: {', '.join(unknown)}")
+    legacy = dict(zip(LEGACY_OPTION_NAMES, legacy_positional, strict=False))
+    duplicated = sorted(set(legacy) & set(legacy_keywords))
+    if duplicated:
+        raise TypeError(f"call_model got multiple values for: {', '.join(duplicated)}")
+    legacy.update(legacy_keywords)
+    if not legacy:
+        return options or CallOptions()
+    if options is not None:
+        raise TypeError("pass options or the deprecated transport, profile_path, and api_key arguments, not both")
+    warnings.warn(
+        "call_model transport, profile_path, and api_key arguments are deprecated. Pass options=CallOptions(...).",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+    return CallOptions(**legacy)
+
+
 def call_model(
     system_prompt: str,
     mode: str,
     case_text: str,
-    transport: Transport | None = None,
-    profile_path: Path | None = None,
-    api_key: str | None = None,
+    *legacy_positional: object,
+    options: CallOptions | None = None,
+    **legacy_keywords: object,
 ) -> str:
-    """Return the model report for one review envelope."""
-    profile = load_profile(profile_path or DEFAULT_PROFILE_PATH)
-    key = os.environ.get("MODEL_API_KEY", "") if api_key is None else api_key
+    """Return the model report for one review envelope.
+
+    The transport, profile_path, and api_key parameters from 0.2.0 still work
+    by position or keyword and emit a DeprecationWarning.
+    """
+    resolved = resolve_options(options, legacy_positional, legacy_keywords)
+    profile = load_profile(resolved.profile_path or DEFAULT_PROFILE_PATH)
+    key = os.environ.get("MODEL_API_KEY", "") if resolved.api_key is None else resolved.api_key
     if not key:
         raise ModelCallError("MODEL_API_KEY is empty. Map the provider secret to MODEL_API_KEY.")
     builder = REQUEST_BUILDERS.get(profile["protocol"])
     if builder is None:
         raise ModelCallError(f"unsupported protocol {profile['protocol']}. Use one of {sorted(REQUEST_BUILDERS)}.")
     url, headers, body = builder(profile, system_prompt, case_text, key)
-    response = (transport or post_json)(url, headers, body)
+    response = (resolved.transport or post_json)(url, headers, body)
     return extract_text(profile["protocol"], response)

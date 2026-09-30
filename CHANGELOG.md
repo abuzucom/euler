@@ -25,6 +25,15 @@ loading `QUALITY.md` into a deployment.
 - Limited D5 runtime declarations to `requirements.txt` and `pyproject.toml`.
 - Fixed ruff and mypy findings in the checker code. Marked the command line
   scripts executable.
+- Enabled the ruff pylint (PL) and bandit (S) rule families. Five S603 and
+  S310 findings have no code fix. `make lint` fails on them by decision.
+- Resolved `git` to an absolute path in `ci/build_pr_case.py`.
+
+### Deprecated
+
+- `ci.call_model.call_model` takes `options=CallOptions(...)`. The
+  `transport`, `profile_path`, and `api_key` parameters still work by position
+  or keyword and emit a `DeprecationWarning`.
 
 ## [0.2.0] (2026-09-30)
 

@@ -76,8 +76,8 @@ def unpinned_package_json(relative: str, path: Path) -> list[Finding]:
     data = load_json(path)
     findings = []
     for section in PACKAGE_JSON_SECTIONS:
-        for name, spec in (data.get(section) or {}).items():
-            spec = str(spec)
+        for name, raw_spec in (data.get(section) or {}).items():
+            spec = str(raw_spec)
             pinned_git = "#" in spec and FULL_SHA.match(spec.rsplit("#", 1)[1])
             if EXACT_SEMVER.match(spec) or pinned_git or spec.startswith(LOCAL_SPEC_PREFIXES):
                 continue
@@ -101,8 +101,8 @@ def join_requirement_lines(text: str) -> list[tuple[int, str]]:
 def unpinned_requirement_lines(relative: str, lines: list[tuple[int, str]]) -> list[Finding]:
     """D1 for PEP 508 requirement strings."""
     findings = []
-    for number, requirement in lines:
-        requirement = requirement.split(" #", 1)[0].strip()
+    for number, line in lines:
+        requirement = line.split(" #", 1)[0].strip()
         if not requirement or requirement.startswith(("#", "-")):
             continue
         if EXACT_REQUIREMENT.match(requirement) or "@" in requirement and "#sha256=" in requirement:
