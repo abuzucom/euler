@@ -11,9 +11,17 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import dependencies, python_ast, regex_scan, text_scan
-from .common import PYTHON_SUFFIXES, SKIPPED_DIRECTORIES, Finding, parse_python, read_text, relative_name
+from .common import (
+    PYTHON_SUFFIXES,
+    SKIPPED_DIRECTORIES,
+    Finding,
+    exceeds_parser_limits,
+    parse_python,
+    read_text,
+    relative_name,
+)
 
-__all__ = ["CHECKS", "Finding", "collect_files", "run_checks"]
+__all__ = ["CHECKS", "Finding", "collect_files", "exceeds_parser_limits", "run_checks"]
 
 TextCheck = Callable[[Path, str, str], list[Finding]]
 AstCheck = Callable[[str, "python_ast.ast.Module"], list[Finding]]

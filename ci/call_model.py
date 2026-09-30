@@ -10,6 +10,7 @@ from __future__ import annotations
 import http.client
 import json
 import os
+import sys
 import urllib.parse
 import warnings
 from collections.abc import Callable
@@ -56,8 +57,13 @@ def post_json(
     finally:
         connection.close()
     if response.status >= HTTP_ERROR_MIN_STATUS:
-        detail = raw.decode("utf-8", errors="replace")[:ERROR_BODY_LIMIT]
-        raise ModelCallError(f"provider returned HTTP {response.status}: {detail}. Check the model and quota.")
+        # The body can name the account, organization, or quota. Keep it in the run log and out of the PR
+        # comment. Collapsing it to one line stops it from starting a '::' workflow command line.
+        detail = " ".join(raw.decode("utf-8", errors="replace")[:ERROR_BODY_LIMIT].split())
+        sys.stderr.write(f"provider error body: {detail}\n")
+        raise ModelCallError(
+            f"provider returned HTTP {response.status}. Check the model and quota in the workflow run log."
+        )
     try:
         return json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
