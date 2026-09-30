@@ -58,6 +58,8 @@ def ollama_request(profile: dict, system_prompt: str, case_text: str, api_key: s
     body = {
         "model": profile["model"],
         "stream": False,
+        # Reasoning models otherwise spend num_predict on thinking and return empty content.
+        "think": False,
         "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": case_text}],
         "options": {"temperature": 0, "num_predict": profile["max_output_tokens"]},
     }
@@ -88,8 +90,8 @@ def anthropic_request(profile: dict, system_prompt: str, case_text: str, api_key
     return f"{profile['endpoint']}/messages", headers, body
 
 
-def extract_text(protocol: str, response: dict) -> str:
-    """Return the text content of a provider response."""
+def read_text_field(protocol: str, response: dict) -> str:
+    """Return the raw text field of a provider response."""
     try:
         if protocol == "ollama":
             return response["message"]["content"]
@@ -98,6 +100,14 @@ def extract_text(protocol: str, response: dict) -> str:
         return "".join(block["text"] for block in response["content"] if block.get("type") == "text")
     except (KeyError, IndexError, TypeError) as error:
         raise ModelCallError(f"unexpected {protocol} response shape: missing {error}. Check the provider API.") from error
+
+
+def extract_text(protocol: str, response: dict) -> str:
+    """Return the non-empty text content of a provider response."""
+    text = read_text_field(protocol, response)
+    if not isinstance(text, str) or not text.strip():
+        raise ModelCallError(f"{protocol} response has no text content. Check the output token budget and model.")
+    return text
 
 
 REQUEST_BUILDERS = {"ollama": ollama_request, "openai-compatible": openai_request, "anthropic": anthropic_request}
