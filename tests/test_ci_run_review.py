@@ -41,7 +41,9 @@ class RunReviewTest(unittest.TestCase):
         self.addCleanup(self.temp_dir.cleanup)
         self.review_dir = Path(self.temp_dir.name)
 
-    def write_review(self, chunks: list[list[str]], prescan: list[dict] | None = None, unreviewed: list[str] | None = None) -> None:
+    def write_review(
+        self, chunks: list[list[str]], prescan: list[dict] | None = None, unreviewed: list[str] | None = None
+    ) -> None:
         """Write envelopes, prescan, and manifest files."""
         envelopes = self.review_dir / "envelopes"
         envelopes.mkdir()
@@ -49,12 +51,17 @@ class RunReviewTest(unittest.TestCase):
         for index, files in enumerate(chunks, 1):
             name = f"{index:03d}.json"
             metadata = {"base_sha": "a" * 40, "head_sha": "b" * 40}
-            text = review_envelope.build_envelope("PR", {path: "+x\n" for path in files}, "", [], metadata)
+            text = review_envelope.build_envelope("PR", dict.fromkeys(files, "+x\n"), "", [], metadata)
             (envelopes / name).write_text(text, encoding="utf-8")
             manifest_chunks.append({"envelope": name, "files": files})
         changed_files = [path for files in chunks for path in files]
-        manifest = {"base_sha": "a" * 40, "head_sha": "b" * 40, "changed_files": changed_files,
-                    "unreviewed": unreviewed or [], "chunks": manifest_chunks}
+        manifest = {
+            "base_sha": "a" * 40,
+            "head_sha": "b" * 40,
+            "changed_files": changed_files,
+            "unreviewed": unreviewed or [],
+            "chunks": manifest_chunks,
+        }
         (self.review_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         (self.review_dir / "prescan.json").write_text(json.dumps(prescan or []), encoding="utf-8")
 
@@ -86,7 +93,9 @@ class RunReviewTest(unittest.TestCase):
     def test_blocking_prescan_forces_block(self) -> None:
         prescan = [{"id": "P1", "file": "app.py", "line": 1, "class": "M1", "message": "m", "blocking": True}]
         self.write_review([["app.py"]], prescan=prescan)
-        dismissed = report("APPROVE").replace('"prescan": []', '"prescan": [{"id": "P1", "status": "dismissed", "reason": "r"}]')
+        dismissed = report("APPROVE").replace(
+            '"prescan": []', '"prescan": [{"id": "P1", "status": "dismissed", "reason": "r"}]'
+        )
         self.assertEqual(self.run_with(ScriptedModel([dismissed]))["verdict"], "BLOCK")
 
     def test_unreviewed_files_force_needs_human(self) -> None:

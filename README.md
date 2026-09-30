@@ -100,6 +100,14 @@ Run `make lint` for ruff, mypy, and yamllint. Install the tools first with
 `pip install --require-hashes -r requirements-dev.txt`. The `ci` workflow runs
 `make lint` in a separate job.
 
+`ruff.toml` and `ruff.warn.toml` come from the organization baseline in
+`abuzucom/rough`. The only tailoring sets `target-version` to `py311`. `make
+lint` runs these ruff steps:
+
+- the block tier with `--ignore-noqa`, which fails the build
+- `ruff format --check`, which fails the build
+- the warn tier with `--exit-zero`, which reports only
+
 Other workflows cover the time between pull requests:
 
 - `codeql.yml` scans the Python sources and the workflows on pull requests,
