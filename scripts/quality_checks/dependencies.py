@@ -15,6 +15,7 @@ EXACT_SEMVER = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 USES_LINE = re.compile(r"^\s*-?\s*uses:\s*['\"]?([^'\"\s#]+)")
 REQUIREMENT_NAME = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
+HASH_OPTION = re.compile(r"\s--hash=\S+")
 EXACT_REQUIREMENT = re.compile(r"^[A-Za-z0-9._-]+(?:\[[^\]]*\])?\s*==\s*[^=*,;\s]+\s*(?:;.*)?$")
 JS_IMPORT = re.compile(r"""(?:\bfrom\s+|\bimport\s+|\brequire\(\s*)['"]([^'"]+)['"]""")
 PACKAGE_JSON_SECTIONS = ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies")
@@ -82,6 +83,19 @@ def unpinned_package_json(relative: str, path: Path) -> list[Finding]:
                 continue
             findings.append(Finding(relative, 1, "D1", f"'{name}' uses unpinned spec '{spec}'", False))
     return findings
+
+
+def join_requirement_lines(text: str) -> list[tuple[int, str]]:
+    """Return logical requirement lines with continuations joined and hash options removed."""
+    logical: list[tuple[int, list[str]]] = []
+    continued = False
+    for number, line in enumerate(text.splitlines(), 1):
+        stripped = line.rstrip()
+        if not continued:
+            logical.append((number, []))
+        logical[-1][1].append(stripped.removesuffix("\\"))
+        continued = stripped.endswith("\\")
+    return [(number, HASH_OPTION.sub("", " " + " ".join(parts)).strip()) for number, parts in logical]
 
 
 def unpinned_requirement_lines(relative: str, lines: list[tuple[int, str]]) -> list[Finding]:
@@ -158,7 +172,7 @@ def check_unpinned(path: Path, relative: str, text: str) -> list[Finding]:
     if name == "package.json":
         return unpinned_package_json(relative, path)
     if name.startswith("requirements") and name.endswith(".txt"):
-        return unpinned_requirement_lines(relative, list(enumerate(text.splitlines(), 1)))
+        return unpinned_requirement_lines(relative, join_requirement_lines(text))
     if name == "pyproject.toml":
         return unpinned_pyproject(relative, path)
     if name == "Cargo.toml":
@@ -195,7 +209,9 @@ def check_lockfile_drift(root: Path, relatives: list[str], changed: list[str] | 
 def declared_python(root: Path) -> dict[str, str]:
     """Return declared Python packages as import name to manifest path."""
     declared: dict[str, str] = {}
-    for manifest in sorted(root.glob("requirements*.txt")):
+    # Only runtime requirements declare imports. Dev tool files such as
+    # requirements-dev.txt list tools that code never imports.
+    for manifest in sorted(root.glob("requirements.txt")):
         for line in (read_text(manifest) or "").splitlines():
             match = REQUIREMENT_NAME.match(line)
             if match and not line.lstrip().startswith(("#", "-")):
@@ -221,7 +237,7 @@ def python_imports(path: Path) -> set[str]:
         tree = ast.parse(read_text(path) or "")
     except SyntaxError:
         return set()
-    names = set()
+    names: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             names.update(alias.name.split(".")[0] for alias in node.names)
@@ -248,7 +264,7 @@ def first_import_locations(root: Path, sources: list[Path]) -> dict[str, str]:
 
 def unused_python(root: Path, sources: list[Path]) -> list[Finding]:
     """D5 for Python: declared but unused, and imported but undeclared."""
-    has_manifest = any(root.glob("requirements*.txt")) or (root / "pyproject.toml").is_file()
+    has_manifest = (root / "requirements.txt").is_file() or (root / "pyproject.toml").is_file()
     if not has_manifest:
         return []
     declared = declared_python(root)

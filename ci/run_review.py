@@ -26,9 +26,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import review_report  # resolved through the path set above
+
 from ci import check_review_response  # resolved through the path set above
 from ci.call_model import ModelCallError  # resolved through the path set above
-import review_report  # resolved through the path set above
 
 DEFAULT_MODEL_CALL = "ci.call_model:call_model"
 VERDICT_RANK = check_review_response.VERDICT_RANK

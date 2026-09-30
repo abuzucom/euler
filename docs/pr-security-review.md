@@ -44,6 +44,14 @@ checkout:
 9. `review` posts a fenced PR comment and fails on BLOCK or NEEDS-HUMAN.
 10. `review` publishes a `security-review` check run on the head SHA.
 
+## Differences from upstream
+
+- Every foucault script path carries the `.foucault/` prefix.
+- Each job declares its own permissions. Upstream grants `checks: write` and
+  `pull-requests: write` at workflow level.
+- The file follows the repository yamllint rules. It quotes the `on` key and
+  wraps the long `review` condition.
+
 ## Trust boundary
 
 `workflow_run` runs default-branch code. A pull request cannot edit the

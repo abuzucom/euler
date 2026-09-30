@@ -12,8 +12,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from ci import run_review  # resolved through the path set above
 import review_envelope  # resolved through the path set above
+
+from ci import run_review  # resolved through the path set above
 
 
 def report(verdict: str, findings: list[dict] | None = None) -> str:
@@ -51,7 +52,8 @@ class RunReviewTest(unittest.TestCase):
             text = review_envelope.build_envelope("PR", {path: "+x\n" for path in files}, "", [], metadata)
             (envelopes / name).write_text(text, encoding="utf-8")
             manifest_chunks.append({"envelope": name, "files": files})
-        manifest = {"base_sha": "a" * 40, "head_sha": "b" * 40, "changed_files": sum(chunks, []),
+        changed_files = [path for files in chunks for path in files]
+        manifest = {"base_sha": "a" * 40, "head_sha": "b" * 40, "changed_files": changed_files,
                     "unreviewed": unreviewed or [], "chunks": manifest_chunks}
         (self.review_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         (self.review_dir / "prescan.json").write_text(json.dumps(prescan or []), encoding="utf-8")

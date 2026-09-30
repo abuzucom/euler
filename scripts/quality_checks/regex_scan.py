@@ -13,7 +13,7 @@ RE_FUNCTIONS = frozenset({"compile", "match", "search", "fullmatch", "findall", 
 GROUP_PREFIX = re.compile(r"\?(?:P?<[A-Za-z_]\w*>|<=|<!|[:=!>])")
 BOUNDED_REPEAT = re.compile(r"\{(?P<low>\d*)(?P<comma>,(?P<high>\d*))?\}")
 ESCAPE_LENGTH = 2
-JS_LITERAL_START = re.compile(r"(?:^|[=(,:!&|?{};])[ \t]*/(?![/*])", re.M)
+JS_LITERAL_START = re.compile(r"(?:^|[=(,:!&|?{};])[ \t]*/(?![/*])", re.MULTILINE)
 JS_REGEXP_CALL = re.compile(r"new\s+RegExp\(\s*(?P<quote>['\"])(?P<body>(?:\\.|(?!(?P=quote))[^\\\n])*)(?P=quote)")
 
 

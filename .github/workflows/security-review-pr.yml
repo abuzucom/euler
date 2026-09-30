@@ -1,3 +1,4 @@
+---
 name: security-review-pr
 
 # Runs the abuzucom/foucault PR security review on this repository's pull
@@ -12,7 +13,7 @@ name: security-review-pr
 # Upgrade: set FOUCAULT_REF to a new full commit SHA, update the version
 # comment, and diff this file against the new upstream workflows.
 
-on:
+"on":
   workflow_run:
     workflows: [ci]
     types: [completed]
@@ -21,14 +22,18 @@ concurrency:
   group: security-review-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: true
 
+# Each job declares only the permissions it uses. Upstream foucault grants
+# these permissions at workflow level.
 permissions:
-  checks: write
   contents: read
-  pull-requests: write
 
 jobs:
   resolve-pr:
     runs-on: ubuntu-latest
+    permissions:
+      checks: read
+      contents: read
+      pull-requests: read
     outputs:
       same_repository: ${{ steps.resolve.outputs.same_repository }}
       already_reviewed: ${{ steps.resolve.outputs.already_reviewed }}
@@ -40,7 +45,7 @@ jobs:
     steps:
       - name: Resolve pull request from workflow run head
         id: resolve
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
         with:
           script: |
             const workflowRun = context.payload.workflow_run;
@@ -113,15 +118,22 @@ jobs:
 
   review:
     needs: resolve-pr
-    if: needs.resolve-pr.result == 'success' && needs.resolve-pr.outputs.same_repository == 'true' && needs.resolve-pr.outputs.already_reviewed != 'true'
+    if: >-
+      needs.resolve-pr.result == 'success'
+      && needs.resolve-pr.outputs.same_repository == 'true'
+      && needs.resolve-pr.outputs.already_reviewed != 'true'
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      contents: read
+      pull-requests: write
     env:
       # Foucault v3.3.14.
       FOUCAULT_REF: "06d74fba4d9013654cdaf9896bb7535724385186"
     steps:
       - name: Resolve pull request metadata
         id: resolve
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
         env:
           INPUT_PR_NUMBER: ${{ needs.resolve-pr.outputs.pr_number }}
           INPUT_BASE_SHA: ${{ needs.resolve-pr.outputs.base_sha }}
@@ -224,14 +236,14 @@ jobs:
             }
 
       - name: Checkout pull request
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           ref: ${{ steps.resolve.outputs.base_sha }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Checkout AUDIT.md
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           repository: abuzucom/foucault
           ref: ${{ env.FOUCAULT_REF }}
@@ -322,7 +334,7 @@ jobs:
       # leaving it available for diagnosis.
       - name: Upload the invalid model response
         if: ${{ failure() && steps.validate.conclusion == 'failure' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: invalid-review-response
           path: response.txt
@@ -393,7 +405,7 @@ jobs:
           esac
 
       - name: Post PR comment
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
         env:
           PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
           BASE_SHA: ${{ steps.resolve.outputs.base_sha }}
@@ -436,7 +448,7 @@ jobs:
       - name: Publish check run
         if: ${{ always() }}
         timeout-minutes: 1
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
         env:
           HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
           JOB_STATUS: ${{ job.status }}
@@ -498,6 +510,7 @@ jobs:
     needs: resolve-pr
     if: needs.resolve-pr.result == 'success' && needs.resolve-pr.outputs.same_repository == 'false'
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Explain skipped review
         run: >-

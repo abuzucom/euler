@@ -79,6 +79,9 @@ This repository imports policy text only. Most rules here have no mechanical
 enforcement in this repository. Each such instruction remains binding. The
 following checks exist:
 - `.github/workflows/ci.yml` runs `make check` on every pull request.
+- `.github/workflows/ci.yml` runs `make lint` on every pull request. ruff and
+  mypy cover `scripts/`, `ci/`, and `eval/run_eval.py`. ruff also covers
+  `tests/`. yamllint covers `.github/`.
 - `make check` runs `scripts/check_quality_policy.py` on `QUALITY.md` and on
   this file for ASCII, LF line endings, and prose dashes.
 - `scripts/check_code_quality.py empty-catch` backs the catch block rule.
@@ -96,6 +99,8 @@ following checks exist:
 - `make check` runs every policy check, checker, eval structure check, and
   unit test.
 - `make test` runs the unit tests only.
+- `make lint` runs ruff, mypy, and yamllint. The tools come from
+  `requirements-dev.txt`.
 
 ### Architecture
 

@@ -100,7 +100,7 @@ def find_structure_violations(text: str) -> list[str]:
 def is_exempt_line(line: str) -> bool:
     """Return True for table rows and HTML comment lines."""
     stripped = line.strip()
-    return stripped.startswith("|") or stripped.startswith("<!--") or stripped.endswith("-->")
+    return stripped.startswith(("|", "<!--")) or stripped.endswith("-->")
 
 
 def find_line_violations(text: str) -> list[str]:
@@ -116,8 +116,7 @@ def find_line_violations(text: str) -> list[str]:
         if len(line) > MAX_PROSE_WIDTH and not line.startswith(LONG_LINE_PREFIXES):
             violations.append(f"line {line_number} exceeds {MAX_PROSE_WIDTH} characters")
         prose = CODE_SPAN.sub("", line.lstrip())
-        if prose.startswith(BULLET_PREFIX):
-            prose = prose[len(BULLET_PREFIX) :]
+        prose = prose.removeprefix(BULLET_PREFIX)
         if PROSE_DASH.search(prose):
             violations.append(f"line {line_number} uses a prose dash")
     return violations
