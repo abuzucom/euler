@@ -1,0 +1,1 @@
+Selected lines from a progress helper. The caller is not part of the selection.

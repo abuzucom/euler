@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "BLOCK",
+  "expected_classes": [
+    "M13"
+  ],
+  "expect_json": true,
+  "notes": "The PR silences a type error with a type-checker suppression comment instead of fixing the return type. M13 is Blocking."
+}

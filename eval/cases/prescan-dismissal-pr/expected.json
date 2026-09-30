@@ -1,0 +1,7 @@
+{
+  "mode": "PR",
+  "expected_verdict": "APPROVE",
+  "expected_classes": [],
+  "expect_json": true,
+  "notes": "The handler returns 404. The prescan flags 404 as an M11 candidate. HTTP status codes are values clear from context. The model dismisses the candidate with a reason."
+}

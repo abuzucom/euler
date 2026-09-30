@@ -1,0 +1,10 @@
+diff --git a/billing/store.py b/billing/store.py
+--- a/billing/store.py
++++ b/billing/store.py
+@@ -1,2 +1,5 @@
+ def save_invoice(db, invoice):
+-    db.insert("invoices", invoice.to_row())
++    try:
++        db.insert("invoices", invoice.to_row())
++    except Exception:
++        pass

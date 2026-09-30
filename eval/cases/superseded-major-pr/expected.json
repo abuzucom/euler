@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "APPROVE",
+  "expected_classes": [
+    "D6"
+  ],
+  "expect_json": true,
+  "notes": "The PR adds the deprecated request package at its last release. The PR states a rationale and pins the version. D6 flags the deprecation at MEDIUM. MEDIUM does not block."
+}

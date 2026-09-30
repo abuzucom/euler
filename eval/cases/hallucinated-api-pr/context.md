@@ -1,0 +1,1 @@
+Adds retries to the status fetch. requirements.txt pins requests==2.32.3.

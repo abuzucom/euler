@@ -18,4 +18,9 @@ loading `QUALITY.md` into a deployment.
 - Added the `Makefile` and the `ci` workflow.
 - Added `scripts/check_code_quality.py` with heuristic checkers for Q3, Q5, Q8,
   Q9, Q11, Q13, M1, M11, M12, M13, M16, M17, M18, C3, D1, D2, and D5.
+- Added the `eval/` golden corpus with 38 cases and `eval/run_eval.py`.
+- Added `scripts/review_report.py` and `scripts/review_envelope.py` for report
+  parsing and the review envelope.
+- Clarified that Blocking and Escalate findings rate HIGH in File, Piece, and
+  Wholesale modes.
 - Rewrote `README.md` around the review contract and the foucault boundary.

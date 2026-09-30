@@ -1,0 +1,7 @@
+{
+  "mode": "PR",
+  "expected_verdict": "APPROVE",
+  "expected_classes": [],
+  "expect_json": true,
+  "notes": "The PR adds a guarded helper with a test. No class applies with a finding."
+}

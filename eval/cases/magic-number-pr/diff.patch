@@ -1,0 +1,8 @@
+diff --git a/billing/fees.py b/billing/fees.py
+new file mode 100644
+--- /dev/null
++++ b/billing/fees.py
+@@ -0,0 +1,3 @@
++def late_fee(balance, days_late):
++    fee = balance * 0.0175 * days_late
++    return min(fee, 45)

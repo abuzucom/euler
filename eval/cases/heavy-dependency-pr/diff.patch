@@ -1,0 +1,32 @@
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -1,4 +1,6 @@
+ {
+   "name": "cli",
+-  "dependencies": {}
++  "dependencies": {
++    "lodash": "4.17.21"
++  }
+ }
+diff --git a/package-lock.json b/package-lock.json
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,4 +1,6 @@
+ {
+   "lockfileVersion": 3,
+-  "packages": {}
++  "packages": {
++    "node_modules/lodash": {"version": "4.17.21"}
++  }
+ }
+diff --git a/src/args.js b/src/args.js
+new file mode 100644
+--- /dev/null
++++ b/src/args.js
+@@ -0,0 +1,5 @@
++import _ from 'lodash';
++
++export function lastArgument(argv) {
++  return _.last(argv);
++}

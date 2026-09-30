@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "BLOCK",
+  "expected_classes": [
+    "M11"
+  ],
+  "expect_json": true,
+  "notes": "late_fee multiplies by 0.0175 and caps at 45 with no name for either value. The context does not state the rate or the cap. M11 is Blocking."
+}

@@ -1,0 +1,10 @@
+diff --git a/app/accounts.py b/app/accounts.py
+--- a/app/accounts.py
++++ b/app/accounts.py
+@@ -1,3 +1,6 @@
+ def apply_status(account, status):
++    if status == "closed":
++        account.delete()
++        return
+     account.status = status
+     account.save()

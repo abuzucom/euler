@@ -1,0 +1,9 @@
+{
+  "mode": "File",
+  "expected_verdict": "RISK: HIGH",
+  "expected_classes": [
+    "Q10"
+  ],
+  "expect_json": false,
+  "notes": "notify creates a task and drops the reference. The event loop can garbage-collect the task. Exceptions vanish. Lost notifications on a payment path rate HIGH."
+}

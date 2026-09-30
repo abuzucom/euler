@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "NEEDS-HUMAN",
+  "expected_classes": [
+    "D2"
+  ],
+  "expect_json": true,
+  "notes": "The PR adds a dependency to package.json without a lockfile change. Installs resolve different versions per run. D2 is Escalate."
+}

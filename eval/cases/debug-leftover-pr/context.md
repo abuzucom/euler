@@ -1,0 +1,1 @@
+Fixes the empty cart bug.

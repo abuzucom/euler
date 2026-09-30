@@ -1,0 +1,1 @@
+Stops the nightly job from crashing on transient database errors.

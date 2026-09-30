@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "APPROVE",
+  "expected_classes": [
+    "D4"
+  ],
+  "expect_json": true,
+  "notes": "The PR adds httpx while requests stays in use. The versions stay pinned. The lockfile changes. The PR states a rationale. D4 flags the overlap at MEDIUM. MEDIUM does not block."
+}

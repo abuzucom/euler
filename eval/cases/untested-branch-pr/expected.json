@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "BLOCK",
+  "expected_classes": [
+    "C3"
+  ],
+  "expect_json": true,
+  "notes": "The PR adds a branch that deletes accounts on a new status value. No test covers the branch. The untested path mutates data. C3 rates HIGH."
+}

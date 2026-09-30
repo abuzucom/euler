@@ -1,0 +1,7 @@
+{
+  "mode": "PR",
+  "expected_verdict": "APPROVE",
+  "expected_classes": [],
+  "expect_json": true,
+  "notes": "The PR builds SQL by string concatenation. Injection belongs to foucault per section 9. The report mentions it as out of scope. No quality class applies."
+}

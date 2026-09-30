@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "BLOCK",
+  "expected_classes": [
+    "Q4"
+  ],
+  "expect_json": true,
+  "notes": "average_rating divides by len(reviews). A product without reviews reaches the division through the new endpoint. The request crashes with ZeroDivisionError. Q4 is Blocking."
+}

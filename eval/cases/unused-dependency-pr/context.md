@@ -1,0 +1,1 @@
+Replaces arrow with the standard library. arrow appears nowhere else. requirements.txt keeps arrow==1.3.0.

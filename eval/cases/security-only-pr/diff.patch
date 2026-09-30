@@ -1,0 +1,9 @@
+diff --git a/app/lookup.py b/app/lookup.py
+new file mode 100644
+--- /dev/null
++++ b/app/lookup.py
+@@ -0,0 +1,4 @@
++def find_customer(cursor, email: str):
++    """Return the customer row for an email address."""
++    cursor.execute("SELECT id, name FROM customers WHERE email = '" + email + "'")
++    return cursor.fetchone()

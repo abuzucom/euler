@@ -1,0 +1,12 @@
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,7 @@
+ {
+   "name": "api",
+   "dependencies": {
+-    "express": "4.21.1"
++    "express": "4.21.1",
++    "helmet": "8.0.0"
+   }
+ }

@@ -107,6 +107,12 @@ these properties:
 - no prose dashes
 - the 32 KiB size cap
 
+## Eval corpus
+
+[`eval/`](eval/README.md) holds the golden corpus. `python3 eval/run_eval.py`
+validates its structure. `--model-call module:function` runs it against a real
+model.
+
 ## Agent policy
 
 [`AGENTS.md`](AGENTS.md) governs agents working in this repository. It holds a

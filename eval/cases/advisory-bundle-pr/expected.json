@@ -1,0 +1,11 @@
+{
+  "mode": "PR",
+  "expected_verdict": "APPROVE",
+  "expected_classes": [
+    "M2",
+    "M7",
+    "M8"
+  ],
+  "expect_json": true,
+  "notes": "The helper uses short names, nests four levels deep, and runs past sixty lines. Behavior stays correct. Every finding sits in an Advisory class. Advisory findings cap at LOW and never block."
+}

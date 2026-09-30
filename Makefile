@@ -1,12 +1,12 @@
-.PHONY: check test policy quality
+.PHONY: check test policy quality eval
 
 # Overridable for platforms without this interpreter name:
 #   make check PYTHON=py
 PYTHON ?= python3
 
-PROSE_DOCS = AGENTS.md README.md CHANGELOG.md
+PROSE_DOCS = AGENTS.md README.md CHANGELOG.md eval/README.md
 # The self-scan skips tests/ because test fixtures hold flagged patterns on purpose.
-QUALITY_PATHS = scripts
+QUALITY_PATHS = scripts eval/run_eval.py
 
 policy:
 	$(PYTHON) scripts/check_quality_policy.py QUALITY.md
@@ -15,7 +15,10 @@ policy:
 quality:
 	$(PYTHON) scripts/check_code_quality.py all $(QUALITY_PATHS)
 
+eval:
+	$(PYTHON) eval/run_eval.py
+
 test:
 	$(PYTHON) -m unittest discover -s tests
 
-check: policy quality test
+check: policy quality eval test

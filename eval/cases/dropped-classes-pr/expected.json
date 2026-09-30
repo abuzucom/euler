@@ -1,0 +1,7 @@
+{
+  "mode": "PR",
+  "expected_verdict": "APPROVE",
+  "expected_classes": [],
+  "expect_json": true,
+  "notes": "The PR uses an assignment inside a conditional and a line over 120 characters. Section 9 excludes both. No finding applies."
+}

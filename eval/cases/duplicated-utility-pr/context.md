@@ -1,0 +1,1 @@
+Adds slug generation for post titles.

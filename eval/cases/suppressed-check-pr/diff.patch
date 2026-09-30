@@ -1,0 +1,7 @@
+diff --git a/app/users.py b/app/users.py
+--- a/app/users.py
++++ b/app/users.py
+@@ -1,2 +1,2 @@
+ def find_user(users: dict[int, str], user_id: int) -> str:
+-    return users.get(user_id)
++    return users.get(user_id)  # type: ignore

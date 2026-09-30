@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "BLOCK",
+  "expected_classes": [
+    "M10"
+  ],
+  "expect_json": true,
+  "notes": "slugify_title reimplements text.slugify from the same package line for line. A fix to one copy misses the other. M10 is Blocking."
+}

@@ -1,0 +1,9 @@
+diff --git a/migrations/0042_default_plans.py b/migrations/0042_default_plans.py
+new file mode 100644
+--- /dev/null
++++ b/migrations/0042_default_plans.py
+@@ -0,0 +1,4 @@
++def upgrade(connection):
++    connection.execute("CREATE TABLE IF NOT EXISTS plans (name TEXT, price INTEGER)")
++    for name, price in (("free", 0), ("pro", 1200)):
++        connection.execute("INSERT INTO plans (name, price) VALUES (?, ?)", (name, price))

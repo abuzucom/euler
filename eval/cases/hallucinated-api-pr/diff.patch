@@ -1,0 +1,9 @@
+diff --git a/client/fetch.py b/client/fetch.py
+--- a/client/fetch.py
++++ b/client/fetch.py
+@@ -2,4 +2,4 @@
+ 
+ 
+ def fetch_status(url):
+-    return requests.get(url, timeout=10).json()
++    return requests.get(url, timeout=10, retries=3).json()

@@ -1,0 +1,7 @@
+{
+  "mode": "Piece",
+  "expected_verdict": "RISK (partial)",
+  "expected_classes": [],
+  "expect_json": false,
+  "notes": "The fragment divides by count. The callers stay unseen. The fragment cannot show whether count can be zero. The report must list the assumption and must not call the fragment clean."
+}

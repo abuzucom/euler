@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "BLOCK",
+  "expected_classes": [
+    "Q11"
+  ],
+  "expect_json": true,
+  "notes": "export_rows opens the output file without with or finally. An exception in the loop leaks the handle and leaves a truncated file. Q11 is Blocking."
+}

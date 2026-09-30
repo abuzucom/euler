@@ -1,0 +1,7 @@
+{
+  "mode": "File",
+  "expected_verdict": "RISK: NONE-FOUND",
+  "expected_classes": [],
+  "expect_json": true,
+  "notes": "Small, named, documented functions with guarded division and no leaks. Every applicable class stays clean."
+}

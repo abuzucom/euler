@@ -1,0 +1,9 @@
+{
+  "mode": "PR",
+  "expected_verdict": "NEEDS-HUMAN",
+  "expected_classes": [
+    "M6"
+  ],
+  "expect_json": true,
+  "notes": "The exported search function renames limit to max_results and drops the old name. Existing callers passing limit break. M6 is Escalate. A human confirms whether a major version bump covers the break."
+}

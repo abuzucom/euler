@@ -1,0 +1,9 @@
+{
+  "mode": "File",
+  "expected_verdict": "RISK: MEDIUM",
+  "expected_classes": [
+    "M16"
+  ],
+  "expect_json": false,
+  "notes": "load_config catches Exception and logs a message without the failure or the recovery. The handler hides permission errors as missing files. M16 rates MEDIUM."
+}

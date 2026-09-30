@@ -1,0 +1,1 @@
+Adds async event streaming. requests has no async client. The rest of the codebase keeps requests for now.
