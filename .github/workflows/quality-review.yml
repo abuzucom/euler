@@ -68,7 +68,9 @@ permissions:
 jobs:
   review:
     runs-on: ubuntu-latest
-    # 20 chunks at up to two model calls each finish well inside this bound.
+    # The bound fits a typical run of 20 chunks at up to two model calls each.
+    # A run where every call reaches the 600-second limit exceeds it and ends
+    # without a verdict.
     timeout-minutes: 45
     concurrency:
       group: quality-review-${{ github.repository }}-${{ inputs.pr_number }}
