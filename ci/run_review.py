@@ -145,7 +145,9 @@ def run(review_dir: Path, policy: Path, model: ModelCall) -> str:
         "head_sha": manifest["head_sha"],
         "unreviewed": manifest["unreviewed"],
         "blocking_prescan": sum(1 for item in prescan if item.get("blocking")),
-        "chunks": [{"envelope": chunk.envelope, "verdict": chunk.verdict, "problems": chunk.problems} for chunk in chunks],
+        "chunks": [
+            {"envelope": chunk.envelope, "verdict": chunk.verdict, "problems": chunk.problems} for chunk in chunks
+        ],
     }
     (review_dir / "result.json").write_text(json.dumps(result, indent=JSON_INDENT) + "\n", encoding="utf-8")
     return verdict

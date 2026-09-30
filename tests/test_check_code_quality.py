@@ -108,14 +108,18 @@ class RecursionCheckTest(CheckerCase):
 
 class ResourceLeakCheckTest(CheckerCase):
     def test_open_without_with(self) -> None:
-        self.assert_flags("resource-leak", "Q11", {"a.py": "def f(p):\n    handle = open(p)\n    return handle.read()\n"})
+        self.assert_flags(
+            "resource-leak", "Q11", {"a.py": "def f(p):\n    handle = open(p)\n    return handle.read()\n"}
+        )
 
     def test_db_connect_without_close(self) -> None:
         source = "import sqlite3\ndef f():\n    conn = sqlite3.connect('x.db')\n    return conn.execute('select 1')\n"
         self.assert_flags("resource-leak", "Q11", {"a.py": source})
 
     def test_with_block_clean(self) -> None:
-        self.assert_clean("resource-leak", "Q11", {"a.py": "def f(p):\n    with open(p) as handle:\n        return handle.read()\n"})
+        self.assert_clean(
+            "resource-leak", "Q11", {"a.py": "def f(p):\n    with open(p) as handle:\n        return handle.read()\n"}
+        )
 
     def test_finally_close_clean(self) -> None:
         source = "def f(p):\n    handle = open(p)\n    try:\n        return handle.read()\n    finally:\n        handle.close()\n"
@@ -246,7 +250,9 @@ class UnpinnedCheckTest(CheckerCase):
         self.assert_flags("unpinned", "D1", {"requirements.txt": "requests>=2.0\n"})
 
     def test_pyproject_range(self) -> None:
-        self.assert_flags("unpinned", "D1", {"pyproject.toml": '[project]\nname = "x"\ndependencies = ["httpx~=0.27"]\n'})
+        self.assert_flags(
+            "unpinned", "D1", {"pyproject.toml": '[project]\nname = "x"\ndependencies = ["httpx~=0.27"]\n'}
+        )
 
     def test_cargo_default_caret(self) -> None:
         self.assert_flags("unpinned", "D1", {"Cargo.toml": '[dependencies]\nserde = "1.0"\n'})

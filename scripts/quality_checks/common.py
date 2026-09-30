@@ -9,13 +9,40 @@ from pathlib import Path
 
 PYTHON_SUFFIXES = frozenset({".py"})
 JS_SUFFIXES = frozenset({".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"})
-SOURCE_SUFFIXES = PYTHON_SUFFIXES | JS_SUFFIXES | frozenset(
-    {".go", ".rs", ".java", ".kt", ".rb", ".php", ".cs", ".c", ".cc", ".cpp", ".h", ".hpp", ".swift", ".scala", ".sh"}
+SOURCE_SUFFIXES = (
+    PYTHON_SUFFIXES
+    | JS_SUFFIXES
+    | frozenset({
+        ".go",
+        ".rs",
+        ".java",
+        ".kt",
+        ".rb",
+        ".php",
+        ".cs",
+        ".c",
+        ".cc",
+        ".cpp",
+        ".h",
+        ".hpp",
+        ".swift",
+        ".scala",
+        ".sh",
+    })
 )
 CONFIG_SUFFIXES = frozenset({".yml", ".yaml", ".toml", ".cfg", ".ini"})
-SKIPPED_DIRECTORIES = frozenset(
-    {".git", "node_modules", ".venv", "venv", "__pycache__", "vendor", "dist", "build", ".tox", ".mypy_cache"}
-)
+SKIPPED_DIRECTORIES = frozenset({
+    ".git",
+    "node_modules",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "vendor",
+    "dist",
+    "build",
+    ".tox",
+    ".mypy_cache",
+})
 TEST_DIRECTORIES = frozenset({"tests", "test", "__tests__", "spec"})
 
 

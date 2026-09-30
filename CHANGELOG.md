@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.4.0] (2026-09-30)
+
+### Changed
+
+- Adopted the `abuzucom/rough` ruff baseline at commit
+  `b52aa382ebede9efb215e479f48cfb9c0b7a9272`. `ruff.toml` holds the block tier
+  and `ruff.warn.toml` the warn tier. `target-version` stays `py311`. The
+  baseline replaces the default rules plus the PL and S families.
+- `make lint` runs the block tier with `--ignore-noqa`, `ruff format --check`,
+  and the warn tier with `--exit-zero`.
+- Reformatted the Python sources and tests with `ruff format`.
+- `ci/call_model.py` posts over `http.client` with an HTTPS-only URL check in
+  place of `urllib.request.urlopen`. New tests cover the request, status, and
+  error paths.
+- Applied two safe block-tier fixes in `dependencies.py` and a test fixture.
+
 ## [0.3.0] (2026-09-30)
 
 ### Added

@@ -140,7 +140,9 @@ def is_excluded(path: str, exclude: list[str]) -> bool:
     return any(fnmatch.fnmatch(path, pattern) for pattern in exclude)
 
 
-def keep_finding(item: quality_checks.Finding, changed: set[str], added: dict[str, list[int]], exclude: list[str]) -> bool:
+def keep_finding(
+    item: quality_checks.Finding, changed: set[str], added: dict[str, list[int]], exclude: list[str]
+) -> bool:
     """Return True for findings in changed, non-excluded files on added lines."""
     if item.path not in changed or is_excluded(item.path, exclude):
         return False
@@ -159,8 +161,14 @@ def build_prescan(options: BuildOptions, changed: list[str], patches: dict[str, 
         findings += quality_checks.run_checks(PROJECT_CHECKS, [tree], tree, changed=changed)
     kept = [item for item in findings if keep_finding(item, set(changed), added, options.exclude)]
     return [
-        {"id": f"P{index}", "file": item.path, "line": item.line, "class": item.class_id,
-         "message": item.message, "blocking": item.blocking}
+        {
+            "id": f"P{index}",
+            "file": item.path,
+            "line": item.line,
+            "class": item.class_id,
+            "message": item.message,
+            "blocking": item.blocking,
+        }
         for index, item in enumerate(kept, 1)
     ]
 
@@ -184,16 +192,30 @@ def build(options: BuildOptions) -> None:
     context = f"Title: {options.title}\n\n{options.body}"
     manifest_chunks = []
     for index, files in enumerate(chunks, 1):
-        metadata = {"pr_number": options.pr_number, "base_sha": options.base, "head_sha": options.head,
-                    "chunk": f"{index}/{len(chunks)}", "changed_files": changed, "unreviewed": unreviewed}
+        metadata = {
+            "pr_number": options.pr_number,
+            "base_sha": options.base,
+            "head_sha": options.head,
+            "chunk": f"{index}/{len(chunks)}",
+            "changed_files": changed,
+            "unreviewed": unreviewed,
+        }
         chunk_prescan = [item for item in prescan if item["file"] in files]
-        text = review_envelope.build_envelope("PR", {path: patches[path] for path in files}, context, chunk_prescan, metadata)
+        text = review_envelope.build_envelope(
+            "PR", {path: patches[path] for path in files}, context, chunk_prescan, metadata
+        )
         name = f"{index:03d}.json"
         (envelopes_dir / name).write_text(text, encoding="utf-8")
         manifest_chunks.append({"envelope": name, "files": files})
     write_json(options.out_dir / "prescan.json", prescan)
-    manifest = {"base_sha": options.base, "head_sha": options.head, "pr_number": options.pr_number,
-                "changed_files": changed, "unreviewed": unreviewed, "chunks": manifest_chunks}
+    manifest = {
+        "base_sha": options.base,
+        "head_sha": options.head,
+        "pr_number": options.pr_number,
+        "changed_files": changed,
+        "unreviewed": unreviewed,
+        "chunks": manifest_chunks,
+    }
     write_json(options.out_dir / "manifest.json", manifest)
 
 
@@ -209,9 +231,15 @@ def main() -> int:
     parser.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
     args = parser.parse_args()
     options = BuildOptions(
-        repo=args.repo, base=args.base, head=args.head, out_dir=args.out_dir,
-        title=os.environ.get("PR_TITLE", ""), body=os.environ.get("PR_BODY", ""), pr_number=args.pr_number,
-        exclude=args.exclude.split(), max_chars=args.max_chars,
+        repo=args.repo,
+        base=args.base,
+        head=args.head,
+        out_dir=args.out_dir,
+        title=os.environ.get("PR_TITLE", ""),
+        body=os.environ.get("PR_BODY", ""),
+        pr_number=args.pr_number,
+        exclude=args.exclude.split(),
+        max_chars=args.max_chars,
     )
     try:
         build(options)
