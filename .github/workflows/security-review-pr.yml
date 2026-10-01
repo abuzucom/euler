@@ -110,8 +110,11 @@ jobs:
             // the details_url of a check run created with the job token, so
             // the summary carries the run URL.
             const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            // The publish step builds the run URL from github.server_url, so
+            // the pattern uses the same host on GitHub Enterprise Server.
+            const serverUrl = (context.serverUrl || "https://github.com").replace(/\/+$/, "");
             const runUrlPattern = new RegExp(
-              `^Workflow run: https://github\\.com/${escapeRegExp(baseRepository)}/actions/runs/(\\d+)$`,
+              `^Workflow run: ${escapeRegExp(serverUrl)}/${escapeRegExp(baseRepository)}/actions/runs/(\\d+)$`,
               "im",
             );
             const isGenuineReview = async (checkRun) => {
