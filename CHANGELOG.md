@@ -46,6 +46,8 @@ loading `QUALITY.md` into a deployment.
   only when its summary names a default-branch run of this workflow
   holding a `security-review-head-<sha>` marker artifact. `resolve-pr` gains
   `actions: read`.
+- The `security-review-pr.yml` dedupe builds its run URL pattern from
+  `github.server_url`. Genuine runs match on GitHub Enterprise Server.
 - `security-review-pr.yml` reads the verdict token with `read -r` in place of
   unquoted `set --`.
 - Set a 30-minute timeout on the `security-review-pr.yml` `review` job and a
