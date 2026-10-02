@@ -74,12 +74,15 @@ item in the `prescan` array of `VERDICT_JSON`.
   provider error body. The job log holds it.
 - A report failing validation twice forces NEEDS-HUMAN for that chunk.
 
-## PR comment
+## PR comment and check run
 
-The comment places the blocking prescan list, the unreviewed file list, the
-validation problems, and each model report inside code fences. Pull request
-paths and model text cannot render as markdown, images, links, or mentions.
-Each list shows at most 50 items of at most 300 characters.
+Each review run posts a new comment on the pull request. The comment places
+the blocking prescan list, the unreviewed file list, the validation problems,
+and each model report inside code fences. Pull request paths and model text
+cannot render as markdown, images, links, or mentions. Each list shows at most
+50 items of at most 300 characters.
+
+The `quality-review` check run page includes the report text in its details.
 
 ## Trust boundary
 

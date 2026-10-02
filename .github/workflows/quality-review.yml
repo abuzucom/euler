@@ -131,16 +131,9 @@ jobs:
             const fs = require('fs');
             const path = `${process.env.RUNNER_TEMP}/review/report.md`;
             const body = fs.readFileSync(path, 'utf8');
-            const marker = '<!-- euler-quality-review -->';
             const issue_number = Number(process.env.PR_NUMBER);
             const { owner, repo } = context.repo;
-            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
-            const existing = comments.find((comment) => comment.body && comment.body.startsWith(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body });
-            }
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
 
       # A failed or timed-out review still publishes a blocking check run, so
       # the gate never goes missing. A run cancelled for a newer head stays
@@ -157,10 +150,17 @@ jobs:
           script: |
             const fs = require('fs');
             let result = null;
+            let reportText = null;
             try {
               result = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/review/result.json`, 'utf8'));
             } catch (error) {
               core.warning(`quality review result unavailable: ${error.message}`);
+            }
+            try {
+              const raw = fs.readFileSync(`${process.env.RUNNER_TEMP}/review/report.md`, 'utf8');
+              reportText = raw.length > 65000 ? raw.slice(0, 65000) + '\n\n... (report truncated to 65k characters)' : raw;
+            } catch (error) {
+              core.warning(`quality review report unavailable: ${error.message}`);
             }
             const blockingConclusion = process.env.FAIL_ON_BLOCK === 'true' ? 'failure' : 'neutral';
             let conclusion;
@@ -168,12 +168,17 @@ jobs:
             if (result && typeof result.verdict === 'string') {
               const blocking = ['BLOCK', 'NEEDS-HUMAN'].includes(result.verdict);
               conclusion = blocking ? blockingConclusion : 'success';
-              output = { title: `Euler quality review: ${result.verdict}`, summary: `Verdict ${result.verdict}.` };
+              output = {
+                title: `Euler quality review: ${result.verdict}`,
+                summary: `Verdict ${result.verdict}.`,
+                text: reportText || undefined,
+              };
             } else {
               conclusion = blockingConclusion;
               output = {
                 title: 'Euler quality review: no verdict',
                 summary: `The review ended before a verdict. Workflow run: ${process.env.RUN_URL}`,
+                text: reportText || undefined,
               };
             }
             await github.rest.checks.create({

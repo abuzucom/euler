@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
-## [0.5.0] (2026-09-30)
+## [0.5.0] (2026-10-02)
 
 ### Added
 
@@ -36,6 +36,8 @@ loading `QUALITY.md` into a deployment.
 - `ci/run_review.py` fences the blocking prescan list, the unreviewed list,
   and the validation problems in the PR comment. Each list shows at most 50
   items of at most 300 characters. Control characters in an item become `?`.
+- `quality-review.yml` posts a new comment on each review run and populates
+  the check run text with the report markdown.
 - `ci/call_model.py` writes the provider error body to the job log only. The
   `ModelCallError` message keeps the HTTP status.
 - The checkers skip a Python or TOML file that raises `RecursionError` or
