@@ -28,6 +28,12 @@ loading `QUALITY.md` into a deployment.
   Malformed output or a count mismatch falls back to one call per file.
 - `ci/build_pr_case.py` decodes numstat paths strictly as UTF-8. Non-UTF-8
   paths are skipped and handled through the unreviewed list.
+- `ci/build_pr_case.py` verifies that `read_blobs` consumes all output bytes
+  from `git cat-file --batch`.
+- `scripts/quality_checks/parser_limits.py` narrows exception handling in
+  `hits_parser_limit` to `SyntaxError` and `tomllib.TOMLDecodeError`.
+- `QUALITY.md` prohibits reporting dismissed prescan candidates and intentional
+  documented changes as findings with severity ratings.
 - A path that is not valid UTF-8 and a text file with an empty patch become
   unreviewed files.
 - The prescan reads head blobs with `git ls-tree` and `git cat-file`. A

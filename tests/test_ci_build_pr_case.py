@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -304,6 +305,21 @@ class BuildTest(GitRepoCase):
     def test_parse_added_lines(self) -> None:
         patch = "@@ -1,2 +1,3 @@\n a\n-b\n+c\n+d\n@@ -10 +11,2 @@\n x\n+y\n"
         self.assertEqual(build_pr_case.parse_added_lines(patch), [2, 3, 12])
+
+    def test_read_blobs_returns_blob_bodies(self) -> None:
+        head = self.commit({"a.txt": "alpha\n"})
+        blob_sha = self.git("rev-parse", f"{head}:a.txt").strip()
+        bodies = build_pr_case.read_blobs([blob_sha], self.repo)
+        self.assertEqual(bodies, [b"alpha\n"])
+
+    def test_read_blobs_rejects_unparsed_trailing_bytes(self) -> None:
+        head = self.commit({"a.txt": "alpha\n"})
+        blob_sha = self.git("rev-parse", f"{head}:a.txt").strip()
+        corrupted_output = f"{blob_sha} blob 6\nalpha\nextra trailing bytes\n".encode("ascii")
+        with mock.patch.object(build_pr_case, "run_git", return_value=corrupted_output):
+            with self.assertRaises(RuntimeError) as context:
+                build_pr_case.read_blobs([blob_sha], self.repo)
+            self.assertIn("unparsed trailing bytes", str(context.exception))
 
 
 if __name__ == "__main__":

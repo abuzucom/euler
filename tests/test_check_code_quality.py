@@ -368,6 +368,10 @@ class ParserLimitTest(CheckerCase):
             self.assertFalse(quality_checks.exceeds_parser_limits(paths[0]))
         self.assertFalse(quality_checks.exceeds_parser_limits(paths[1]))
 
+    def test_toml_decode_error_within_parser_limits(self) -> None:
+        paths = self.write_files({"broken.toml": "a = \n"})
+        self.assertFalse(quality_checks.exceeds_parser_limits(paths[0]))
+
 
 class CommandLineTest(CheckerCase):
     def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
