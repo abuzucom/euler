@@ -37,7 +37,7 @@ def hits_parser_limit(path: Path) -> bool:
             ast.parse(text, filename=str(path))
     except PARSER_LIMIT_ERRORS:
         return True
-    except (SyntaxError, ValueError, tomllib.TOMLDecodeError):
+    except (SyntaxError, tomllib.TOMLDecodeError):
         # Syntax errors keep the checkers' warn-and-skip behavior.
         return False
     return False

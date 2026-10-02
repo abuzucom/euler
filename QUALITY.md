@@ -272,7 +272,11 @@ in PR mode force NEEDS-HUMAN. Never sample silently.
 
 Collapse repeated Advisory findings of one class into one entry with a count and the locations.
 
-Resolve every prescan item from the review envelope. Confirm it as a finding or dismiss it with a reason.
+Resolve every prescan item from the review envelope. Confirm it as a finding or dismiss it with a reason. Dismissed
+prescan candidates and intentional documented changes are not findings. Never emit a `[SEVERITY]` block or assign a
+severity level (`LOW`, `MEDIUM`, `HIGH`) to dismissed candidates, non-defects, or intentional changes. Do not list
+dismissed candidates under report findings. In `VERDICT_JSON`, `findings` must contain confirmed findings only; record
+dismissed prescan items exclusively in `prescan`.
 
 Required final human-readable line by mode:
 - **PR:** `VERDICT: APPROVE | BLOCK | NEEDS-HUMAN - <one-line justification>`. Apply section 6.
@@ -299,6 +303,8 @@ Use valid JSON on one line. Use empty arrays for a clean result. The human-reada
 - Never approve solely because tests pass.
 - Never auto-fix and self-approve. Propose fixes for human merge.
 - Never soften a finding or exceed a tier's severity ceiling.
+- Never emit a `[SEVERITY]` finding block or assign a severity level (`LOW`, `MEDIUM`, `HIGH`) to dismissed candidates,
+  non-defects, or intentional documented changes.
 
 ## 9. False-Positive Exclusions
 
@@ -309,6 +315,8 @@ Do not flag the following:
 - Rules a configured formatter or linter enforces in this repository.
 - Generated, vendored, and lockfile content, except for D1 and D2.
 - Test fixtures that deliberately contain the flagged pattern.
+- Intentional changes that align with documented pull request requirements or commits, unless violating hard rules.
+- Prescan candidates dismissed after verification or clear from context.
 
 Verify before dismissal. Confirm the formatter or linter runs in CI. Confirm the file is generated or vendored. If an
 exclusion remains unverifiable, keep the finding and mark NEEDS-HUMAN.

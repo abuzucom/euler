@@ -276,6 +276,8 @@ def read_blobs(object_ids: list[str], repo: Path) -> list[bytes]:
         end = start + int(header[2])
         bodies.append(output[start:end])
         offset = end + len(b"\n")
+    if offset != len(output):
+        raise RuntimeError(f"git cat-file output has {len(output) - offset} unparsed trailing bytes.")
     return bodies
 
 
