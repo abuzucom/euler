@@ -158,7 +158,9 @@ jobs:
             }
             try {
               const raw = fs.readFileSync(`${process.env.RUNNER_TEMP}/review/report.md`, 'utf8');
-              reportText = raw.length > 65000 ? raw.slice(0, 65000) + '\n\n... (report truncated to 65k characters)' : raw;
+              reportText = raw.length > 65000
+                ? raw.slice(0, 65000) + '\n\n... (report truncated to 65k characters)'
+                : raw;
             } catch (error) {
               core.warning(`quality review report unavailable: ${error.message}`);
             }
