@@ -26,6 +26,8 @@ loading `QUALITY.md` into a deployment.
   no longer hides its patch from the model and the prescan.
 - `ci/build_pr_case.py` reads every patch from one `git diff --raw -p` call.
   Malformed output or a count mismatch falls back to one call per file.
+- `ci/build_pr_case.py` decodes numstat paths strictly as UTF-8. Non-UTF-8
+  paths are skipped and handled through the unreviewed list.
 - A path that is not valid UTF-8 and a text file with an empty patch become
   unreviewed files.
 - The prescan reads head blobs with `git ls-tree` and `git cat-file`. A

@@ -257,6 +257,50 @@ class BuildTest(GitRepoCase):
         manifest = json.loads((self.build(base, head) / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["unreviewed"], ["deep.py"])
 
+    def test_read_binary_paths_skips_non_utf8(self) -> None:
+        base = self.commit({"a.txt": "x\n"})
+        git = shutil.which("git")
+        self.assertIsNotNone(git, "git not found on PATH")
+        env = {**os.environ, **GIT_ENV}
+        blob = (
+            subprocess
+            .run(
+                [str(git), "-C", str(self.repo), "hash-object", "-w", "--stdin"],
+                input=b"\x00\x01\x02",
+                capture_output=True,
+                check=True,
+                env=env,
+            )
+            .stdout.decode("ascii")
+            .strip()
+        )
+        tree_entry = b"100644 blob " + blob.encode("ascii") + b"\tbad\xff.bin\n"
+        tree = (
+            subprocess
+            .run(
+                [str(git), "-C", str(self.repo), "mktree"],
+                input=tree_entry,
+                capture_output=True,
+                check=True,
+                env=env,
+            )
+            .stdout.decode("ascii")
+            .strip()
+        )
+        head = (
+            subprocess
+            .run(
+                [str(git), "-C", str(self.repo), "commit-tree", tree, "-p", base, "-m", "add binary"],
+                capture_output=True,
+                check=True,
+                env=env,
+            )
+            .stdout.decode("ascii")
+            .strip()
+        )
+        options = build_pr_case.BuildOptions(self.repo, base, head, Path(self.temp_dir.name), "", "", 1)
+        self.assertEqual(build_pr_case.read_binary_paths(options), set())
+
     def test_parse_added_lines(self) -> None:
         patch = "@@ -1,2 +1,3 @@\n a\n-b\n+c\n+d\n@@ -10 +11,2 @@\n x\n+y\n"
         self.assertEqual(build_pr_case.parse_added_lines(patch), [2, 3, 12])
