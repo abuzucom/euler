@@ -124,7 +124,11 @@ def read_binary_paths(options: BuildOptions) -> set[str]:
     for record in raw.split(b"\0"):
         fields = record.split(b"\t", NUMSTAT_SPLITS)
         if len(fields) == NUMSTAT_SPLITS + 1 and fields[0] == BINARY_NUMSTAT:
-            binary.add(fields[NUMSTAT_SPLITS].decode("utf-8", errors="replace"))
+            try:
+                binary.add(fields[NUMSTAT_SPLITS].decode("utf-8"))
+            except UnicodeDecodeError:
+                # decode_paths already adds non-UTF-8 paths to undecodable.
+                continue
     return binary
 
 
@@ -239,6 +243,7 @@ def list_head_blobs(options: BuildOptions) -> list[tuple[str, str]]:
     raw = run_git(options.repo, "ls-tree", "-r", "-z", "--full-tree", options.head)
     blobs = []
     for record in raw.split(b"\0"):
+        # The first tab separates metadata from path; tabs in names remain in raw_path.
         meta, _, raw_path = record.partition(b"\t")
         fields = meta.split(b" ")
         if len(fields) != LS_TREE_FIELDS or fields[0] not in REGULAR_FILE_MODES:
