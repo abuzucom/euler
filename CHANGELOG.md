@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.5.1] (2026-10-03)
+
+### Added
+
+- Recorded `abuzucom/xdj-rx3-emu` as an adopter in `adopters/xdj-rx3-emu.md`,
+  pinned at commit `b23947068a328c19215f8ade3db7bd2b4bcb05cc`.
+
 ## [0.5.0] (2026-10-02)
 
 ### Added
