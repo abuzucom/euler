@@ -11,6 +11,8 @@ Add `adopters/<repo>.md` with these facts:
 - the pinned tag or full commit SHA of `QUALITY.md`
 - the pinned commit SHA of `quality-review.yml`
 - the provider profile and the secret mapped to `MODEL_API_KEY`
+- whether fork reviews use `fork_review: true` and the `fork-review`
+  environment secret
 - the `exclude_paths` value
 - any stack-specific customization
 

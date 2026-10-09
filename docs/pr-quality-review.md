@@ -12,20 +12,26 @@ a report with a machine-readable verdict. The check fails on `BLOCK` or
 2. GitHub runs `quality-review-pr.yml` after `ci` completes.
 3. The caller runs with default-branch code. It resolves one open pull request
    from the workflow run `head_sha`.
-4. A same-repository pull request calls `quality-review.yml`.
-5. A fork pull request receives a `skipped` check run. The skip job receives
-   no secret.
-6. The reusable workflow allows one active review per pull request. A newer
+4. A same-repository pull request calls `quality-review.yml` without setting
+   `fork_review`. The default selects the existing `review` job.
+5. An adopter can set `fork_review: true` to select `fork-review`. The job
+   waits for the adopter's `fork-review` environment protection rules.
+6. The fork job fetches `refs/pull/<number>/head` after approval. It reads PR
+   files as data and never executes them.
+7. The caller can provide `MODEL_API_KEY` as a reusable-workflow secret. A
+   fork adopter can instead configure `MODEL_API_KEY` as an environment secret.
+   The job fails before a model request when the key is empty.
+8. The reusable workflow allows one active review per pull request. A newer
    head cancels an obsolete run.
-7. The workflow checks out the base revision with full history. The head
-   commit stays in the object store without a checkout.
-8. The workflow checks out `abuzucom/euler` at `quality_ref` into `.euler`.
-9. `ci/build_pr_case.py` writes one or more review envelopes.
-10. `ci/run_review.py review` calls the model once per envelope.
-11. `ci/check_review_response.py` validates each report. An invalid report
+9. Both execution paths keep the base and head commits in the object store.
+   The same-repository path does not check out the pull request head.
+10. The workflow checks out `abuzucom/euler` at `quality_ref` into `.euler`.
+11. `ci/build_pr_case.py` writes one or more review envelopes.
+12. `ci/run_review.py review` calls the model once per envelope.
+13. `ci/check_review_response.py` validates each report. An invalid report
     triggers one retry with the problems attached.
-12. The workflow posts one PR comment and a `quality-review` check run.
-13. `ci/run_review.py gate` fails the job on a blocking verdict.
+14. The workflow posts one PR comment and a `quality-review` check run.
+15. `ci/run_review.py gate` fails the job on a blocking verdict.
 
 ## Envelope and prescan
 
@@ -71,8 +77,17 @@ Call `quality-review.yml` as a reusable workflow. Pin `uses:` and
 the caller. The adopter supplies these items:
 
 - a caller workflow
-- a provider API key as a repository secret, mapped to `MODEL_API_KEY`
+- a provider API key mapped to `MODEL_API_KEY`
+- `fork_review: true` for fork pull requests that require environment approval
+- a `fork-review` environment with protection rules and a `MODEL_API_KEY`
+  environment secret for that protected path
 - an `adopters/<repo>.md` record per `adopters/README.md`
+
+Same-repository callers can omit `fork_review` and keep mapping a repository or
+organization secret to `MODEL_API_KEY`. Fork callers can map an accessible
+`OLLAMA_API_KEY` secret to `MODEL_API_KEY` instead of configuring an environment
+secret. If both sources use the `MODEL_API_KEY` name, the environment secret
+takes precedence in the protected job.
 
 The workflow checks out `abuzucom/euler` without credentials beyond the
 caller token. An adopter outside the `abuzucom` organization needs read access

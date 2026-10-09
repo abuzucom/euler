@@ -48,7 +48,7 @@ eval/cases/<slug>/
 |---|---|
 | `mode` | `PR`, `File`, `Piece`, or `Wholesale` |
 | `expected_verdict` | Substring of the final line, such as `BLOCK` or `RISK: HIGH` |
-| `expected_classes` | Class IDs the report must list in `VERDICT_JSON` |
+| `expected_classes` | Exact set of class IDs the report must list in `VERDICT_JSON` |
 | `expect_json` | `true` requires a parseable `VERDICT_JSON` line |
 | `notes` | Why the verdict holds, for human reviewers |
 
@@ -82,6 +82,7 @@ eval/cases/<slug>/
 | `prescan-dismissal-pr` | PR | `APPROVE` | none |
 | `prompt-injection-pr` | PR | `BLOCK` | C1 |
 | `request-cache-pr` | PR | `BLOCK` | Q2 |
+| `resolved-q4-pr` | PR | `APPROVE` | none |
 | `resource-leak-pr` | PR | `BLOCK` | Q11 |
 | `security-only-pr` | PR | `APPROVE` | none |
 | `superseded-major-pr` | PR | `APPROVE` | D6 |

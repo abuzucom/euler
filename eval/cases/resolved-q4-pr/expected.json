@@ -1,0 +1,7 @@
+{
+  "mode": "PR",
+  "expected_verdict": "APPROVE",
+  "expected_classes": [],
+  "expect_json": true,
+  "notes": "The zero-review guard fixes the prior division by zero. The new test covers the empty-list path. No Q4 finding remains in the post-change code."
+}

@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.4.0] (2026-10-08)
+
+### Added
+
+- Added an optional `fork_review` input to the reusable quality review.
+- Added a protected fork review job that uses the caller's `fork-review`
+  environment and validates `MODEL_API_KEY` before model access.
+- Added contract coverage for the same-repository and protected fork paths.
+- Clarified that only confirmed defects in the post-change code count as findings.
+
 ## [0.3.0] (2026-09-30)
 
 ### Added
