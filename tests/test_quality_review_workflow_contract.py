@@ -112,7 +112,7 @@ class QualityReviewWorkflowContractTests(unittest.TestCase):
         fork_job = extract_block(self.workflow, "fork-review:", 2)
         fetch_commits = extract_step(fork_job, "Fetch review commits")
         fetch_text = "\n".join(fetch_commits)
-        self.assertIn('FORK_REVIEW: ${{ inputs.fork_review }}', fetch_text)
+        self.assertIn("FORK_REVIEW: ${{ inputs.fork_review }}", fetch_text)
         self.assertIn('git fetch --no-tags origin "refs/pull/$PR_NUMBER/head"', fetch_text)
         self.assertIn("git rev-parse --verify 'FETCH_HEAD^{commit}'", fetch_text)
         self.assertIn('if [[ "$FETCHED_HEAD" != "$HEAD_SHA" ]]', fetch_text)
