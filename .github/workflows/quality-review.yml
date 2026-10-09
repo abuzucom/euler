@@ -69,7 +69,25 @@ permissions:
   contents: read
 
 jobs:
+  validate-quality-ref:
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      quality_ref: ${{ steps.validate.outputs.quality_ref }}
+    steps:
+      - name: Validate quality ref
+        id: validate
+        env:
+          QUALITY_REF: ${{ inputs.quality_ref }}
+        run: |
+          if [[ ! "$QUALITY_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::quality_ref must be a full lowercase commit SHA."
+            exit 1
+          fi
+          printf 'quality_ref=%s\n' "$QUALITY_REF" >> "$GITHUB_OUTPUT"
+
   prepare-review:
+    needs: validate-quality-ref
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -79,6 +97,7 @@ jobs:
       cancel-in-progress: true
     outputs:
       artifact_id: ${{ steps.upload-review.outputs.artifact-id }}
+      quality_ref: ${{ needs.validate-quality-ref.outputs.quality_ref }}
     steps:
       - name: Checkout trusted workflow revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -90,7 +109,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: abuzucom/euler
-          ref: ${{ inputs.quality_ref }}
+          ref: ${{ needs.validate-quality-ref.outputs.quality_ref }}
           path: .euler
           persist-credentials: false
 
@@ -179,7 +198,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: abuzucom/euler
-          ref: ${{ inputs.quality_ref }}
+          ref: ${{ needs.prepare-review.outputs.quality_ref }}
           path: .euler
           persist-credentials: false
 
@@ -338,7 +357,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: abuzucom/euler
-          ref: ${{ inputs.quality_ref }}
+          ref: ${{ needs.prepare-review.outputs.quality_ref }}
           path: .euler
           persist-credentials: false
 

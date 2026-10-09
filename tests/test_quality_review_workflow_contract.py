@@ -79,6 +79,39 @@ class QualityReviewWorkflowContractTests(unittest.TestCase):
             fork_job.index("      - name: Download review envelopes"),
         )
 
+    def test_quality_ref_is_validated_as_an_immutable_commit_before_checkout(self) -> None:
+        validation_job = extract_block(self.workflow, "validate-quality-ref:", 2)
+        validation_step = extract_step(validation_job, "Validate quality ref")
+        validation_text = "\n".join(validation_step)
+
+        self.assertIn("permissions: {}", "\n".join(validation_job))
+        self.assertIn("QUALITY_REF: ${{ inputs.quality_ref }}", validation_text)
+        self.assertIn("^[0-9a-f]{40}$", validation_text)
+        self.assertIn("exit 1", validation_text)
+        self.assertIn("quality_ref=%s", validation_text)
+        self.assertIn("$GITHUB_OUTPUT", validation_text)
+
+        prepare = extract_block(self.workflow, "prepare-review:", 2)
+        self.assertIn("    needs: validate-quality-ref", prepare)
+        self.assertIn(
+            "      quality_ref: ${{ needs.validate-quality-ref.outputs.quality_ref }}",
+            prepare,
+        )
+        prepare_checkout = extract_step(prepare, "Checkout euler policy and adapter")
+        self.assertIn(
+            "          ref: ${{ needs.validate-quality-ref.outputs.quality_ref }}",
+            prepare_checkout,
+        )
+
+        for job_name in ("review", "fork-review"):
+            job = extract_block(self.workflow, f"{job_name}:", 2)
+            self.assertIn("    needs: prepare-review", job)
+            checkout = extract_step(job, "Checkout euler policy and adapter")
+            self.assertIn(
+                "          ref: ${{ needs.prepare-review.outputs.quality_ref }}",
+                checkout,
+            )
+
     def test_preparation_job_has_read_only_permissions_and_no_model_secret(self) -> None:
         prepare = extract_block(self.workflow, "prepare-review:", 2)
         prepare_text = "\n".join(prepare)

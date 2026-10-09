@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.6.4] (2026-10-08)
+
+### Fixed
+
+- Validate `quality_ref` as a full commit SHA before workflow checkouts.
+
 ## [0.6.3] (2026-10-08)
 
 ### Fixed
