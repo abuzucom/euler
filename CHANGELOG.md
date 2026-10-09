@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.6.3] (2026-10-08)
+
+### Fixed
+
+- Narrow reported evaluator finding classes to strings for mypy.
+
 ## [0.6.2] (2026-10-08)
 
 ### Fixed
