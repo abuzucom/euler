@@ -6,6 +6,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.6.4] (2026-10-08)
+
+### Fixed
+
+- Validate `quality_ref` as a full commit SHA before workflow checkouts.
+
+## [0.6.3] (2026-10-08)
+
+### Fixed
+
+- Narrow reported evaluator finding classes to strings for mypy.
+
+## [0.6.2] (2026-10-08)
+
+### Fixed
+
+- Isolate review commit fetching and envelope creation in a read-only job.
+- Require model jobs to consume the prepared artifact after fork environment
+  approval.
+- Fetch review commits without checking out untrusted pull request content.
+- Reject fork reviews when the fetched pull request head differs from
+  `head_sha`.
+- Format the quality review workflow contract test for Ruff.
+
+## [0.6.0] (2026-10-08)
+
+### Added
+
+- Added an optional `fork_review` input to the reusable quality review.
+- Added a protected fork review job that uses the caller's `fork-review`
+  environment and validates `MODEL_API_KEY` before model access.
+- Added contract coverage for the same-repository and protected fork paths.
+- Clarified that only confirmed defects in the post-change code count as findings.
+- Rejected unexpected finding classes in the live golden-corpus evaluator.
+
 ## [0.5.1] (2026-10-03)
 
 ### Added

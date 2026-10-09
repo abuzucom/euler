@@ -12,23 +12,37 @@ a report with a machine-readable verdict. The check fails on `BLOCK` or
 2. GitHub runs `quality-review-pr.yml` after `ci` completes.
 3. The caller runs with default-branch code. It resolves one open pull request
    from the workflow run `head_sha`.
-4. A same-repository pull request calls `quality-review.yml`.
-5. A fork pull request receives a `skipped` check run. The skip job receives
-   no secret.
-6. The reusable workflow allows one active review per pull request. A newer
-   head cancels an obsolete run. The `review` job stops after 45 minutes. The
-   `max_chunks` input caps the envelopes at 20 by default. The model review
-   step stops after 40 minutes. A run that ends without a verdict publishes a
-   blocking `quality-review` check run.
-7. The workflow checks out the base revision with full history. The head
-   commit stays in the object store without a checkout.
-8. The workflow checks out `abuzucom/euler` at `quality_ref` into `.euler`.
-9. `ci/build_pr_case.py` writes one or more review envelopes.
-10. `ci/run_review.py review` calls the model once per envelope.
-11. `ci/check_review_response.py` validates each report. An invalid report
+4. A same-repository pull request calls `quality-review.yml` without setting
+   `fork_review`. The default selects the existing `review` job.
+5. The repository caller skips fork pull requests. An adopter caller can set
+   `fork_review: true` to select `fork-review`.
+6. A read-only preparation job checks out the trusted workflow revision and
+   fetches review commits into the Git object database. For fork reviews, it
+   verifies that the fetched head matches `head_sha`. It builds and uploads
+   review envelopes without receiving the model key or executing PR files.
+7. The selected model job downloads the review artifact. The fork model job
+   waits for the adopter's `fork-review` environment protection rules before
+   any job step runs. Both model jobs validate `MODEL_API_KEY` before a model
+   request. PR files remain data and never run as code.
+8. The caller maps its accessible `OLLAMA_API_KEY` secret to `MODEL_API_KEY`.
+   An adopter can instead configure `MODEL_API_KEY` in the environment.
+   The selected secret remains unavailable until environment approval. The job
+   fails before a model request when the key is empty.
+9. The reusable workflow allows one active review per pull request. A newer
+   head cancels an obsolete run. The review job stops after 45 minutes. The
+   `max_chunks` input caps envelopes at 20 by default. The model step stops
+   after 40 minutes. A run without a verdict publishes a blocking check.
+10. The preparation job fetches the base commit by its full SHA. The
+    same-repository path fetches the head commit by its full SHA. The fork
+    path fetches the pull request ref and rejects a head mismatch.
+11. Both execution paths check out `abuzucom/euler` at `quality_ref` into
+    `.euler`.
+12. `ci/build_pr_case.py` writes one or more review envelopes.
+13. `ci/run_review.py review` calls the model once per envelope.
+14. `ci/check_review_response.py` validates each report. An invalid report
     triggers one retry with the problems attached.
-12. The workflow posts one PR comment and a `quality-review` check run.
-13. `ci/run_review.py gate` fails the job on a blocking verdict.
+15. The workflow posts one PR comment and a `quality-review` check run.
+16. `ci/run_review.py gate` fails the job on a blocking verdict.
 
 ## Envelope and prescan
 
@@ -86,10 +100,14 @@ The `quality-review` check run page includes the report text in its details.
 
 ## Trust boundary
 
-The caller runs default-branch code. The workflow never executes a pull
-request file. Pull request titles and bodies reach scripts through environment
-variables only. No workflow step places pull request text in shell syntax.
-Every checkout sets `persist-credentials: false`.
+The caller runs default-branch code. The preparation job checks out the
+trusted workflow revision and never checks out or executes a pull request
+file. It fetches review commits into Git objects and pins fork review input to
+the requested head SHA. The preparation job has read-only repository
+permissions and receives no model key. Model jobs receive only the generated
+review artifact. Pull request titles and bodies reach scripts through
+environment variables only. No workflow step places pull request text in
+shell syntax. Every checkout sets `persist-credentials: false`.
 
 The provider receives `QUALITY.md` and the review envelope. The provider
 receives no GitHub token and no other repository secret.
@@ -106,8 +124,16 @@ Call `quality-review.yml` as a reusable workflow. Pin `uses:` and
 the caller. The adopter supplies these items:
 
 - a caller workflow
-- a provider API key as a repository secret, mapped to `MODEL_API_KEY`
+- a provider API key mapped to `MODEL_API_KEY`
+- `fork_review: true` for fork pull requests that require environment approval
+- a `fork-review` environment with protection rules
+- optionally, a `MODEL_API_KEY` environment secret for the protected path
 - an `adopters/<repo>.md` record per `adopters/README.md`
+
+Same-repository callers can omit `fork_review` and map the repository or
+organization `OLLAMA_API_KEY` secret to `MODEL_API_KEY`. Fork callers can use
+the same mapping. If an environment secret also defines `MODEL_API_KEY`, that
+environment value takes precedence in the protected job.
 
 The workflow checks out `abuzucom/euler` without credentials beyond the
 caller token. An adopter outside the `abuzucom` organization needs read access
