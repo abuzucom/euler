@@ -8,8 +8,8 @@ name: quality-review
 #   with:
 #     quality_ref: "<the same full-commit-sha>"
 #
-# Both jobs check out the trusted workflow revision and fetch review commits
-# into git objects. Neither job checks out or executes pull request content.
+# The preparation job reads review commits as data and uploads review
+# envelopes. Model jobs consume that artifact without fetching PR commits.
 # Pull request text reaches scripts through environment variables only.
 
 "on":
@@ -69,20 +69,16 @@ permissions:
   contents: read
 
 jobs:
-  review:
-    if: ${{ inputs.fork_review != true }}
+  prepare-review:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
-      checks: write
-    # A worst case of 20 chunks at two 600-second calls each exceeds any job
-    # bound. The model review step stops at 40 minutes. The remaining time lets
-    # the publish step post a blocking check run without a verdict.
     timeout-minutes: 45
     concurrency:
-      group: quality-review-${{ github.repository }}-${{ inputs.pr_number }}
+      group: quality-review-prepare-${{ github.repository }}-${{ inputs.pr_number }}
       cancel-in-progress: true
+    outputs:
+      artifact_id: ${{ steps.upload-review.outputs.artifact-id }}
     steps:
       - name: Checkout trusted workflow revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -152,6 +148,82 @@ jobs:
           --pr-number "$PR_NUMBER" --exclude "$EXCLUDE_PATHS"
           --max-chunks "$MAX_CHUNKS"
           --out-dir "$RUNNER_TEMP/review"
+
+      - name: Upload review envelopes
+        id: upload-review
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: quality-review-${{ github.run_id }}
+          path: ${{ runner.temp }}/review/
+          if-no-files-found: error
+          retention-days: 1
+
+  review:
+    if: ${{ inputs.fork_review != true }}
+    needs: prepare-review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+      checks: write
+    # A worst case of 20 chunks at two 600-second calls each exceeds any job
+    # bound. The model review step stops at 40 minutes. The remaining time lets
+    # the publish step post a blocking check run without a verdict.
+    timeout-minutes: 45
+    concurrency:
+      group: quality-review-${{ github.repository }}-${{ inputs.pr_number }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout euler policy and adapter
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: abuzucom/euler
+          ref: ${{ inputs.quality_ref }}
+          path: .euler
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Download review envelopes
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        env:
+          ARTIFACT_ID: ${{ needs.prepare-review.outputs.artifact_id }}
+        with:
+          script: |
+            const fs = require('fs');
+            const artifactId = Number(process.env.ARTIFACT_ID);
+            if (!Number.isSafeInteger(artifactId) || artifactId < 1) {
+              throw new Error('Review artifact ID is invalid.');
+            }
+            const response = await github.rest.actions.downloadArtifact({
+              ...context.repo,
+              artifact_id: artifactId,
+              archive_format: 'zip',
+            });
+            fs.writeFileSync(
+              `${process.env.RUNNER_TEMP}/quality-review.zip`,
+              Buffer.from(response.data),
+            );
+
+      - name: Extract review envelopes
+        env:
+          ARCHIVE_PATH: ${{ runner.temp }}/quality-review.zip
+          REVIEW_DIR: ${{ runner.temp }}/review
+        run: |
+          entries="$(unzip -Z1 "$ARCHIVE_PATH")"
+          while IFS= read -r entry; do
+            case "$entry" in
+              manifest.json|prescan.json|envelopes/) ;;
+              envelopes/[0-9][0-9][0-9].json) ;;
+              *) echo "::error::Unexpected review artifact entry."; exit 1 ;;
+            esac
+          done <<< "$entries"
+          mkdir -p "$REVIEW_DIR"
+          unzip -q "$ARCHIVE_PATH" -d "$REVIEW_DIR"
 
       - name: Validate model API key
         env:
@@ -246,10 +318,12 @@ jobs:
         run: python3 .euler/ci/run_review.py gate "$RUNNER_TEMP/review/result.json" --fail-on-block "$FAIL_ON_BLOCK"
   fork-review:
     if: ${{ inputs.fork_review == true }}
+    needs: prepare-review
     runs-on: ubuntu-latest
     environment: fork-review
     permissions:
       contents: read
+      actions: read
       pull-requests: write
       checks: write
     # A worst case of 20 chunks at two 600-second calls each exceeds any job
@@ -260,12 +334,6 @@ jobs:
       group: quality-review-${{ github.repository }}-${{ inputs.pr_number }}
       cancel-in-progress: true
     steps:
-      - name: Checkout trusted workflow revision
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-
       - name: Checkout euler policy and adapter
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -279,55 +347,42 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Fetch review commits
+      - name: Download review envelopes
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
-          BASE_SHA: ${{ inputs.base_sha }}
-          HEAD_SHA: ${{ inputs.head_sha }}
-          PR_NUMBER: ${{ inputs.pr_number }}
-          FORK_REVIEW: ${{ inputs.fork_review }}
-          GITHUB_TOKEN: ${{ github.token }}
-          GIT_CONFIG_KEY_0: http.https://github.com/.extraheader
-        run: |
-          if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ || ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::Review revisions must be full lowercase commit SHAs."
-            exit 1
-          fi
-          if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
-            echo "::error::PR_NUMBER must be a positive integer."
-            exit 1
-          fi
-          TOKEN_HEADER="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
-          export GIT_CONFIG_COUNT=1
-          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $TOKEN_HEADER"
-          git fetch --no-tags origin "$BASE_SHA"
-          if [[ "$FORK_REVIEW" == "true" ]]; then
-            git fetch --no-tags origin "refs/pull/$PR_NUMBER/head"
-            FETCHED_HEAD="$(git rev-parse --verify 'FETCH_HEAD^{commit}')"
-            if [[ "$FETCHED_HEAD" != "$HEAD_SHA" ]]; then
-              echo "::error::The pull request head changed. Start a new review run."
-              exit 1
-            fi
-          else
-            git fetch --no-tags origin "$HEAD_SHA"
-          fi
-          git cat-file -e "$BASE_SHA^{commit}"
-          git cat-file -e "$HEAD_SHA^{commit}"
+          ARTIFACT_ID: ${{ needs.prepare-review.outputs.artifact_id }}
+        with:
+          script: |
+            const fs = require('fs');
+            const artifactId = Number(process.env.ARTIFACT_ID);
+            if (!Number.isSafeInteger(artifactId) || artifactId < 1) {
+              throw new Error('Review artifact ID is invalid.');
+            }
+            const response = await github.rest.actions.downloadArtifact({
+              ...context.repo,
+              artifact_id: artifactId,
+              archive_format: 'zip',
+            });
+            fs.writeFileSync(
+              `${process.env.RUNNER_TEMP}/quality-review.zip`,
+              Buffer.from(response.data),
+            );
 
-      - name: Build review envelopes
+      - name: Extract review envelopes
         env:
-          BASE_SHA: ${{ inputs.base_sha }}
-          HEAD_SHA: ${{ inputs.head_sha }}
-          PR_NUMBER: ${{ inputs.pr_number }}
-          PR_TITLE: ${{ inputs.pr_title }}
-          PR_BODY: ${{ inputs.pr_body }}
-          EXCLUDE_PATHS: ${{ inputs.exclude_paths }}
-          MAX_CHUNKS: ${{ inputs.max_chunks }}
-        run: >-
-          python3 .euler/ci/build_pr_case.py
-          --repo . --base "$BASE_SHA" --head "$HEAD_SHA"
-          --pr-number "$PR_NUMBER" --exclude "$EXCLUDE_PATHS"
-          --max-chunks "$MAX_CHUNKS"
-          --out-dir "$RUNNER_TEMP/review"
+          ARCHIVE_PATH: ${{ runner.temp }}/quality-review.zip
+          REVIEW_DIR: ${{ runner.temp }}/review
+        run: |
+          entries="$(unzip -Z1 "$ARCHIVE_PATH")"
+          while IFS= read -r entry; do
+            case "$entry" in
+              manifest.json|prescan.json|envelopes/) ;;
+              envelopes/[0-9][0-9][0-9].json) ;;
+              *) echo "::error::Unexpected review artifact entry."; exit 1 ;;
+            esac
+          done <<< "$entries"
+          mkdir -p "$REVIEW_DIR"
+          unzip -q "$ARCHIVE_PATH" -d "$REVIEW_DIR"
 
       - name: Validate model API key
         env:

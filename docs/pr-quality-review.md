@@ -16,30 +16,33 @@ a report with a machine-readable verdict. The check fails on `BLOCK` or
    `fork_review`. The default selects the existing `review` job.
 5. The repository caller skips fork pull requests. An adopter caller can set
    `fork_review: true` to select `fork-review`.
-6. Both jobs check out the trusted workflow revision and fetch review commits
-   into the Git object database. The fork job waits for the adopter's
-   `fork-review` environment protection rules before fetching the PR head.
-   It verifies that the fetched head matches `head_sha`. It reads PR files as
-   data and never checks them out or executes them.
-7. The caller maps its accessible `OLLAMA_API_KEY` secret to `MODEL_API_KEY`.
+6. A read-only preparation job checks out the trusted workflow revision and
+   fetches review commits into the Git object database. For fork reviews, it
+   verifies that the fetched head matches `head_sha`. It builds and uploads
+   review envelopes without receiving the model key or executing PR files.
+7. The selected model job downloads the review artifact. The fork model job
+   waits for the adopter's `fork-review` environment protection rules before
+   any job step runs. Both model jobs validate `MODEL_API_KEY` before a model
+   request. PR files remain data and never run as code.
+8. The caller maps its accessible `OLLAMA_API_KEY` secret to `MODEL_API_KEY`.
    An adopter can instead configure `MODEL_API_KEY` in the environment.
    The selected secret remains unavailable until environment approval. The job
    fails before a model request when the key is empty.
-8. The reusable workflow allows one active review per pull request. A newer
+9. The reusable workflow allows one active review per pull request. A newer
    head cancels an obsolete run. The review job stops after 45 minutes. The
    `max_chunks` input caps envelopes at 20 by default. The model step stops
    after 40 minutes. A run without a verdict publishes a blocking check.
-9. Both paths fetch the base commit by its full SHA. The same-repository path
-   fetches the head commit by its full SHA. The fork path fetches the pull
-   request ref and rejects the run if it no longer matches `head_sha`.
-10. Both execution paths check out `abuzucom/euler` at `quality_ref` into
+10. The preparation job fetches the base commit by its full SHA. The
+    same-repository path fetches the head commit by its full SHA. The fork
+    path fetches the pull request ref and rejects a head mismatch.
+11. Both execution paths check out `abuzucom/euler` at `quality_ref` into
     `.euler`.
-11. `ci/build_pr_case.py` writes one or more review envelopes.
-12. `ci/run_review.py review` calls the model once per envelope.
-13. `ci/check_review_response.py` validates each report. An invalid report
+12. `ci/build_pr_case.py` writes one or more review envelopes.
+13. `ci/run_review.py review` calls the model once per envelope.
+14. `ci/check_review_response.py` validates each report. An invalid report
     triggers one retry with the problems attached.
-14. The workflow posts one PR comment and a `quality-review` check run.
-15. `ci/run_review.py gate` fails the job on a blocking verdict.
+15. The workflow posts one PR comment and a `quality-review` check run.
+16. `ci/run_review.py gate` fails the job on a blocking verdict.
 
 ## Envelope and prescan
 
@@ -97,10 +100,12 @@ The `quality-review` check run page includes the report text in its details.
 
 ## Trust boundary
 
-The caller runs default-branch code. The workflow checks out the trusted
-workflow revision and never checks out or executes a pull request file. It
-fetches review commits into Git objects and pins fork review input to the
-requested head SHA. Pull request titles and bodies reach scripts through
+The caller runs default-branch code. The preparation job checks out the
+trusted workflow revision and never checks out or executes a pull request
+file. It fetches review commits into Git objects and pins fork review input to
+the requested head SHA. The preparation job has read-only repository
+permissions and receives no model key. Model jobs receive only the generated
+review artifact. Pull request titles and bodies reach scripts through
 environment variables only. No workflow step places pull request text in
 shell syntax. Every checkout sets `persist-credentials: false`.
 

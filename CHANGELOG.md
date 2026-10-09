@@ -6,10 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
-## [0.6.1] (2026-10-08)
+## [0.6.2] (2026-10-08)
 
 ### Fixed
 
+- Isolate review commit fetching and envelope creation in a read-only job.
+- Require model jobs to consume the prepared artifact after fork environment
+  approval.
 - Fetch review commits without checking out untrusted pull request content.
 - Reject fork reviews when the fetched pull request head differs from
   `head_sha`.
