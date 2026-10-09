@@ -8,9 +8,8 @@ name: quality-review
 #   with:
 #     quality_ref: "<the same full-commit-sha>"
 #
-# The same-repository job checks out the base revision and reads the head
-# revision from git objects. The protected fork job fetches the pull request
-# ref after environment approval. Neither job executes pull request content.
+# Both jobs check out the trusted workflow revision and fetch review commits
+# into git objects. Neither job checks out or executes pull request content.
 # Pull request text reaches scripts through environment variables only.
 
 "on":
@@ -85,13 +84,10 @@ jobs:
       group: quality-review-${{ github.repository }}-${{ inputs.pr_number }}
       cancel-in-progress: true
     steps:
-      - name: Checkout base revision
+      - name: Checkout trusted workflow revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ inputs.base_sha }}
-          # Full history brings the same-repository head commit into the
-          # object store without a checkout.
-          fetch-depth: 0
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Checkout euler policy and adapter
@@ -106,6 +102,40 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: '3.12'
+
+      - name: Fetch review commits
+        env:
+          BASE_SHA: ${{ inputs.base_sha }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          FORK_REVIEW: ${{ inputs.fork_review }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GIT_CONFIG_KEY_0: http.https://github.com/.extraheader
+        run: |
+          if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ || ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Review revisions must be full lowercase commit SHAs."
+            exit 1
+          fi
+          if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::PR_NUMBER must be a positive integer."
+            exit 1
+          fi
+          TOKEN_HEADER="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $TOKEN_HEADER"
+          git fetch --no-tags origin "$BASE_SHA"
+          if [[ "$FORK_REVIEW" == "true" ]]; then
+            git fetch --no-tags origin "refs/pull/$PR_NUMBER/head"
+            FETCHED_HEAD="$(git rev-parse --verify 'FETCH_HEAD^{commit}')"
+            if [[ "$FETCHED_HEAD" != "$HEAD_SHA" ]]; then
+              echo "::error::The pull request head changed. Start a new review run."
+              exit 1
+            fi
+          else
+            git fetch --no-tags origin "$HEAD_SHA"
+          fi
+          git cat-file -e "$BASE_SHA^{commit}"
+          git cat-file -e "$HEAD_SHA^{commit}"
 
       - name: Build review envelopes
         env:
@@ -230,23 +260,11 @@ jobs:
       group: quality-review-${{ github.repository }}-${{ inputs.pr_number }}
       cancel-in-progress: true
     steps:
-      - name: Checkout base revision
+      - name: Checkout trusted workflow revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ inputs.base_sha }}
-          # Full history brings the same-repository head commit into the
-          # object store without a checkout.
-          fetch-depth: 0
+          ref: ${{ github.sha }}
           persist-credentials: false
-
-      - name: Fetch fork pull request head
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          ref: refs/pull/${{ inputs.pr_number }}/head
-          fetch-depth: 0
-          persist-credentials: false
-          # The protected job reads PR files as data and never executes them.
-          allow-unsafe-pr-checkout: true
 
       - name: Checkout euler policy and adapter
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -260,6 +278,40 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: '3.12'
+
+      - name: Fetch review commits
+        env:
+          BASE_SHA: ${{ inputs.base_sha }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          FORK_REVIEW: ${{ inputs.fork_review }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GIT_CONFIG_KEY_0: http.https://github.com/.extraheader
+        run: |
+          if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ || ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Review revisions must be full lowercase commit SHAs."
+            exit 1
+          fi
+          if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::PR_NUMBER must be a positive integer."
+            exit 1
+          fi
+          TOKEN_HEADER="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $TOKEN_HEADER"
+          git fetch --no-tags origin "$BASE_SHA"
+          if [[ "$FORK_REVIEW" == "true" ]]; then
+            git fetch --no-tags origin "refs/pull/$PR_NUMBER/head"
+            FETCHED_HEAD="$(git rev-parse --verify 'FETCH_HEAD^{commit}')"
+            if [[ "$FETCHED_HEAD" != "$HEAD_SHA" ]]; then
+              echo "::error::The pull request head changed. Start a new review run."
+              exit 1
+            fi
+          else
+            git fetch --no-tags origin "$HEAD_SHA"
+          fi
+          git cat-file -e "$BASE_SHA^{commit}"
+          git cat-file -e "$HEAD_SHA^{commit}"
 
       - name: Build review envelopes
         env:

@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.6.1] (2026-10-08)
+
+### Fixed
+
+- Fetch review commits without checking out untrusted pull request content.
+- Reject fork reviews when the fetched pull request head differs from
+  `head_sha`.
+- Format the quality review workflow contract test for Ruff.
+
 ## [0.6.0] (2026-10-08)
 
 ### Added

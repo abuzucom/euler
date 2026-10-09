@@ -44,19 +44,17 @@ def extract_step(job: list[str], name: str) -> list[str]:
 
 
 def normalize_fork_job(job: list[str]) -> list[str]:
-    """Remove the fork selector and protected-only head fetch."""
+    """Remove the fork selector and protected environment declaration."""
     normalized = [
         line
         for line in job
-        if line not in {
+        if line
+        not in {
             "  fork-review:",
             "    if: ${{ inputs.fork_review == true }}",
             "    environment: fork-review",
         }
     ]
-    fetch_step = extract_step(normalized, "Fetch fork pull request head")
-    start = normalized.index(fetch_step[0])
-    del normalized[start : start + len(fetch_step)]
     normalized = [line for line in normalized if line.strip()]
     return [
         "  review:",
@@ -84,10 +82,7 @@ class QualityReviewWorkflowContractTests(unittest.TestCase):
         self.assertIn("    if: ${{ inputs.fork_review != true }}", review)
 
     def test_only_fork_job_uses_the_protected_environment(self) -> None:
-        environment_lines = [
-            line for line in self.workflow.splitlines()
-            if line.strip().startswith("environment:")
-        ]
+        environment_lines = [line for line in self.workflow.splitlines() if line.strip().startswith("environment:")]
         self.assertEqual(environment_lines, ["    environment: fork-review"])
 
         fork_job = extract_block(self.workflow, "fork-review:", 2)
@@ -95,7 +90,7 @@ class QualityReviewWorkflowContractTests(unittest.TestCase):
         self.assertIn("    environment: fork-review", fork_job)
         self.assertLess(
             fork_job.index("    environment: fork-review"),
-            fork_job.index("      - name: Fetch fork pull request head"),
+            fork_job.index("      - name: Fetch review commits"),
         )
 
     def test_model_secret_is_optional_at_boundary_and_fails_closed(self) -> None:
@@ -115,19 +110,30 @@ class QualityReviewWorkflowContractTests(unittest.TestCase):
 
     def test_fork_path_reads_pr_head_without_running_it(self) -> None:
         fork_job = extract_block(self.workflow, "fork-review:", 2)
-        fetch_head = extract_step(fork_job, "Fetch fork pull request head")
-        fetch_head_text = "\n".join(fetch_head)
-        self.assertIn("ref: refs/pull/${{ inputs.pr_number }}/head", fetch_head_text)
-        self.assertIn("persist-credentials: false", fetch_head_text)
-        self.assertIn("allow-unsafe-pr-checkout: true", fetch_head_text)
-        self.assertIn("reads PR files as data and never executes them", fetch_head_text)
+        fetch_commits = extract_step(fork_job, "Fetch review commits")
+        fetch_text = "\n".join(fetch_commits)
+        self.assertIn('FORK_REVIEW: ${{ inputs.fork_review }}', fetch_text)
+        self.assertIn('git fetch --no-tags origin "refs/pull/$PR_NUMBER/head"', fetch_text)
+        self.assertIn("git rev-parse --verify 'FETCH_HEAD^{commit}'", fetch_text)
+        self.assertIn('if [[ "$FETCHED_HEAD" != "$HEAD_SHA" ]]', fetch_text)
+        self.assertIn('git cat-file -e "$HEAD_SHA^{commit}"', fetch_text)
+        self.assertNotIn("actions/checkout", fetch_text)
+
+    def test_jobs_checkout_trusted_code_and_fetch_review_commits_as_objects(self) -> None:
+        for job_name in ("review", "fork-review"):
+            job = extract_block(self.workflow, f"{job_name}:", 2)
+            checkout = extract_step(job, "Checkout trusted workflow revision")
+            checkout_text = "\n".join(checkout)
+            fetch_commits = extract_step(job, "Fetch review commits")
+            fetch_text = "\n".join(fetch_commits)
+            self.assertIn("ref: ${{ github.sha }}", checkout_text)
+            self.assertIn("persist-credentials: false", checkout_text)
+            self.assertNotIn("inputs.base_sha", checkout_text)
+            self.assertIn('git fetch --no-tags origin "$BASE_SHA"', fetch_text)
+            self.assertIn('git fetch --no-tags origin "$HEAD_SHA"', fetch_text)
 
     def test_both_paths_run_the_same_review_implementation(self) -> None:
-        review = [
-            line
-            for line in extract_block(self.workflow, "review:", 2)
-            if line.strip()
-        ]
+        review = [line for line in extract_block(self.workflow, "review:", 2) if line.strip()]
         fork_job = extract_block(self.workflow, "fork-review:", 2)
         self.assertEqual(review, normalize_fork_job(fork_job))
 

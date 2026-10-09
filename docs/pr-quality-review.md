@@ -16,9 +16,11 @@ a report with a machine-readable verdict. The check fails on `BLOCK` or
    `fork_review`. The default selects the existing `review` job.
 5. The repository caller skips fork pull requests. An adopter caller can set
    `fork_review: true` to select `fork-review`.
-6. The fork job waits for the adopter's `fork-review` environment protection
-   rules. It fetches `refs/pull/<number>/head` after approval. It reads PR
-   files as data and never executes them.
+6. Both jobs check out the trusted workflow revision and fetch review commits
+   into the Git object database. The fork job waits for the adopter's
+   `fork-review` environment protection rules before fetching the PR head.
+   It verifies that the fetched head matches `head_sha`. It reads PR files as
+   data and never checks them out or executes them.
 7. The caller maps its accessible `OLLAMA_API_KEY` secret to `MODEL_API_KEY`.
    An adopter can instead configure `MODEL_API_KEY` in the environment.
    The selected secret remains unavailable until environment approval. The job
@@ -27,8 +29,9 @@ a report with a machine-readable verdict. The check fails on `BLOCK` or
    head cancels an obsolete run. The review job stops after 45 minutes. The
    `max_chunks` input caps envelopes at 20 by default. The model step stops
    after 40 minutes. A run without a verdict publishes a blocking check.
-9. The same-repository path checks out the base revision with full history.
-   The fork path checks out the base and pull request head after approval.
+9. Both paths fetch the base commit by its full SHA. The same-repository path
+   fetches the head commit by its full SHA. The fork path fetches the pull
+   request ref and rejects the run if it no longer matches `head_sha`.
 10. Both execution paths check out `abuzucom/euler` at `quality_ref` into
     `.euler`.
 11. `ci/build_pr_case.py` writes one or more review envelopes.
@@ -94,10 +97,12 @@ The `quality-review` check run page includes the report text in its details.
 
 ## Trust boundary
 
-The caller runs default-branch code. The workflow never executes a pull
-request file. Pull request titles and bodies reach scripts through environment
-variables only. No workflow step places pull request text in shell syntax.
-Every checkout sets `persist-credentials: false`.
+The caller runs default-branch code. The workflow checks out the trusted
+workflow revision and never checks out or executes a pull request file. It
+fetches review commits into Git objects and pins fork review input to the
+requested head SHA. Pull request titles and bodies reach scripts through
+environment variables only. No workflow step places pull request text in
+shell syntax. Every checkout sets `persist-credentials: false`.
 
 The provider receives `QUALITY.md` and the review envelope. The provider
 receives no GitHub token and no other repository secret.
