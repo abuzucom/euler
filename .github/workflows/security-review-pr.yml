@@ -18,9 +18,12 @@ name: security-review-pr
     workflows: [ci]
     types: [completed]
 
+# A second ci run for the same head waits here instead of cancelling a paid
+# review in progress. When it starts, the first run's check run and marker
+# artifact exist, so the resolve-pr dedupe skips the model call.
 concurrency:
   group: security-review-${{ github.event.workflow_run.head_sha }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # Each job declares only the permissions it uses. Upstream foucault grants
 # these permissions at workflow level.
@@ -31,6 +34,7 @@ jobs:
   resolve-pr:
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       checks: read
       contents: read
       pull-requests: read
@@ -45,7 +49,7 @@ jobs:
     steps:
       - name: Resolve pull request from workflow run head
         id: resolve
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         with:
           script: |
             const workflowRun = context.payload.workflow_run;
@@ -97,12 +101,66 @@ jobs:
                 per_page: 100,
               },
             );
-            const alreadyReviewed = checkRuns.some((run) =>
-              run.status === "completed" &&
-              /VERDICT: (APPROVE|BLOCK|NEEDS-HUMAN)\b/.test(
-                run.output?.summary || ""
-              )
+            // A pull request can add its own workflow that creates a check run
+            // with this name and a fake verdict. Count a check run only when
+            // its summary names a run of this workflow file on the default
+            // branch, and that run holds the marker artifact for this head. A
+            // run URL copied from a review of another head has no such
+            // artifact. A failed lookup counts as not reviewed. GitHub replaces
+            // the details_url of a check run created with the job token, so
+            // the summary carries the run URL.
+            const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            // The publish step builds the run URL from github.server_url, so
+            // the pattern uses the same host on GitHub Enterprise Server.
+            const serverUrl = (context.serverUrl || "https://github.com").replace(/\/+$/, "");
+            const runUrlPattern = new RegExp(
+              `^Workflow run: ${escapeRegExp(serverUrl)}/${escapeRegExp(baseRepository)}/actions/runs/(\\d+)$`,
+              "im",
             );
+            const isGenuineReview = async (checkRun) => {
+              if (
+                checkRun.status !== "completed" ||
+                !/VERDICT: (APPROVE|BLOCK|NEEDS-HUMAN)\b/.test(checkRun.output?.summary || "")
+              ) {
+                return false;
+              }
+              const match = runUrlPattern.exec(checkRun.output?.summary || "");
+              if (!match) {
+                return false;
+              }
+              const runId = Number(match[1]);
+              try {
+                const { data: run } = await github.rest.actions.getWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: runId,
+                });
+                const genuineRun = run.path === ".github/workflows/security-review-pr.yml" &&
+                  run.event === "workflow_run" &&
+                  run.head_branch === context.payload.repository?.default_branch &&
+                  run.repository?.full_name?.toLowerCase() === baseRepository.toLowerCase();
+                if (!genuineRun) {
+                  return false;
+                }
+                const { data: artifacts } = await github.rest.actions.listWorkflowRunArtifacts({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: runId,
+                  name: `security-review-head-${headSha}`,
+                });
+                return artifacts.total_count > 0;
+              } catch (error) {
+                core.warning(`check run provenance lookup failed: ${error.message}`);
+                return false;
+              }
+            };
+            let alreadyReviewed = false;
+            for (const checkRun of checkRuns) {
+              if (await isGenuineReview(checkRun)) {
+                alreadyReviewed = true;
+                break;
+              }
+            }
             core.setOutput("already_reviewed", alreadyReviewed ? "true" : "false");
             core.setOutput(
               "same_repository",
@@ -123,6 +181,8 @@ jobs:
       && needs.resolve-pr.outputs.same_repository == 'true'
       && needs.resolve-pr.outputs.already_reviewed != 'true'
     runs-on: ubuntu-latest
+    # Two model calls of up to 600 seconds each plus setup.
+    timeout-minutes: 30
     permissions:
       checks: write
       contents: read
@@ -133,7 +193,7 @@ jobs:
     steps:
       - name: Resolve pull request metadata
         id: resolve
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           INPUT_PR_NUMBER: ${{ needs.resolve-pr.outputs.pr_number }}
           INPUT_BASE_SHA: ${{ needs.resolve-pr.outputs.base_sha }}
@@ -236,14 +296,14 @@ jobs:
             }
 
       - name: Checkout pull request
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: ${{ steps.resolve.outputs.base_sha }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Checkout AUDIT.md
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: abuzucom/foucault
           ref: ${{ env.FOUCAULT_REF }}
@@ -334,7 +394,7 @@ jobs:
       # leaving it available for diagnosis.
       - name: Upload the invalid model response
         if: ${{ failure() && steps.validate.conclusion == 'failure' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: invalid-review-response
           path: response.txt
@@ -375,10 +435,9 @@ jobs:
           # open on an unrecognized token, because 'VERDICT: REJECT' matches
           # neither alternative and would merge.
           rest="${line#VERDICT:}"
-          # Word splitting is what takes the token off the front here.
-          # shellcheck disable=SC2086
-          set -- $rest
-          verdict_token="${1:-}"
+          # read takes the first word without glob expansion of model text.
+          verdict_token=""
+          read -r verdict_token _ <<<"$rest" || true
           case "$verdict_token" in
             APPROVE)
               echo "blocked=false" >> "$GITHUB_OUTPUT"
@@ -404,8 +463,24 @@ jobs:
               ;;
           esac
 
+      # The dedupe in resolve-pr trusts a security-review check run only when
+      # the run it names holds this artifact. The name binds the run to the
+      # head it reviewed.
+      - name: Write review marker
+        env:
+          HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
+        run: printf '%s\n' "$HEAD_SHA" > review-head.txt
+
+      - name: Upload review marker
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: security-review-head-${{ steps.resolve.outputs.head_sha }}
+          path: review-head.txt
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Post PR comment
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
           BASE_SHA: ${{ steps.resolve.outputs.base_sha }}
@@ -448,7 +523,7 @@ jobs:
       - name: Publish check run
         if: ${{ always() }}
         timeout-minutes: 1
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
           JOB_STATUS: ${{ job.status }}
@@ -480,7 +555,8 @@ jobs:
               details_url: process.env.RUN_URL,
               output: {
                 title: `security-review: ${conclusion}`,
-                summary: `Head ${shortHeadSha}: model review result: \`${verdictLine}\``,
+                summary: `Head ${shortHeadSha}: model review result: \`${verdictLine}\`\n` +
+                  `Workflow run: ${process.env.RUN_URL}`,
               },
             };
             let lastError = null;

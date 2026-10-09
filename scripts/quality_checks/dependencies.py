@@ -9,7 +9,16 @@ import sys
 import tomllib
 from pathlib import Path
 
-from .common import JS_SUFFIXES, PYTHON_SUFFIXES, SOURCE_SUFFIXES, Finding, is_test_path, read_text
+from .common import (
+    JS_SUFFIXES,
+    PARSER_LIMIT_ERRORS,
+    PYTHON_SUFFIXES,
+    SOURCE_SUFFIXES,
+    Finding,
+    is_test_path,
+    parse_python,
+    read_text,
+)
 
 EXACT_SEMVER = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -39,10 +48,29 @@ IMPORT_NAME_OVERRIDES = {
     "attrs": "attr",
 }
 SCOPED_PACKAGE_SEGMENTS = 2
-NODE_BUILTINS = frozenset(
-    {"assert", "buffer", "child_process", "crypto", "events", "fs", "http", "https", "net", "os", "path",
-     "process", "querystring", "readline", "stream", "timers", "tls", "url", "util", "worker_threads", "zlib"}
-)
+NODE_BUILTINS = frozenset({
+    "assert",
+    "buffer",
+    "child_process",
+    "crypto",
+    "events",
+    "fs",
+    "http",
+    "https",
+    "net",
+    "os",
+    "path",
+    "process",
+    "querystring",
+    "readline",
+    "stream",
+    "timers",
+    "tls",
+    "url",
+    "util",
+    "worker_threads",
+    "zlib",
+})
 
 
 def load_toml(path: Path) -> dict:
@@ -52,7 +80,9 @@ def load_toml(path: Path) -> dict:
         return tomllib.loads(text or "")
     except tomllib.TOMLDecodeError as error:
         sys.stderr.write(f"warning: skipped {path}: {error}. Fix the TOML syntax to check it.\n")
-        return {}
+    except PARSER_LIMIT_ERRORS as error:
+        sys.stderr.write(f"warning: skipped {path}: {type(error).__name__}. Reduce the nesting to check it.\n")
+    return {}
 
 
 def load_json(path: Path) -> dict:
@@ -105,7 +135,7 @@ def unpinned_requirement_lines(relative: str, lines: list[tuple[int, str]]) -> l
         requirement = line.split(" #", 1)[0].strip()
         if not requirement or requirement.startswith(("#", "-")):
             continue
-        if EXACT_REQUIREMENT.match(requirement) or "@" in requirement and "#sha256=" in requirement:
+        if EXACT_REQUIREMENT.match(requirement) or ("@" in requirement and "#sha256=" in requirement):
             continue
         findings.append(Finding(relative, number, "D1", f"unpinned requirement '{requirement}'", False))
     return findings
@@ -233,9 +263,8 @@ def import_name(package: str) -> str:
 
 def python_imports(path: Path) -> set[str]:
     """Return top-level module names imported by one Python file."""
-    try:
-        tree = ast.parse(read_text(path) or "")
-    except SyntaxError:
+    tree = parse_python(path, read_text(path) or "")
+    if tree is None:
         return set()
     names: set[str] = set()
     for node in ast.walk(tree):

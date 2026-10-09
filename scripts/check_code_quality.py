@@ -62,8 +62,14 @@ def emit(findings: list[Finding], as_json: bool) -> None:
     """Write findings as text lines or a JSON array."""
     if as_json:
         payload = [
-            {"id": f"P{index}", "file": item.path, "line": item.line, "class": item.class_id,
-             "message": item.message, "blocking": item.blocking}
+            {
+                "id": f"P{index}",
+                "file": item.path,
+                "line": item.line,
+                "class": item.class_id,
+                "message": item.message,
+                "blocking": item.blocking,
+            }
             for index, item in enumerate(findings, 1)
         ]
         sys.stdout.write(json.dumps(payload, indent=JSON_INDENT) + "\n")

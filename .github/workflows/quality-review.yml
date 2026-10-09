@@ -57,6 +57,11 @@ name: quality-review
         required: false
         type: string
         default: ""
+      max_chunks:
+        description: "Maximum review envelopes. Files past the limit become unreviewed and force NEEDS-HUMAN."
+        required: false
+        type: number
+        default: 20
     secrets:
       MODEL_API_KEY:
         required: false
@@ -72,20 +77,25 @@ jobs:
       contents: read
       pull-requests: write
       checks: write
+    # A worst case of 20 chunks at two 600-second calls each exceeds any job
+    # bound. The model review step stops at 40 minutes. The remaining time lets
+    # the publish step post a blocking check run without a verdict.
+    timeout-minutes: 45
     concurrency:
       group: quality-review-${{ github.repository }}-${{ inputs.pr_number }}
       cancel-in-progress: true
     steps:
       - name: Checkout base revision
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: ${{ inputs.base_sha }}
-          # Full history keeps the base revision and ancestor commits available.
+          # Full history brings the same-repository head commit into the
+          # object store without a checkout.
           fetch-depth: 0
           persist-credentials: false
 
       - name: Checkout euler policy and adapter
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: abuzucom/euler
           ref: ${{ inputs.quality_ref }}
@@ -93,7 +103,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: '3.12'
 
@@ -105,10 +115,12 @@ jobs:
           PR_TITLE: ${{ inputs.pr_title }}
           PR_BODY: ${{ inputs.pr_body }}
           EXCLUDE_PATHS: ${{ inputs.exclude_paths }}
+          MAX_CHUNKS: ${{ inputs.max_chunks }}
         run: >-
           python3 .euler/ci/build_pr_case.py
           --repo . --base "$BASE_SHA" --head "$HEAD_SHA"
           --pr-number "$PR_NUMBER" --exclude "$EXCLUDE_PATHS"
+          --max-chunks "$MAX_CHUNKS"
           --out-dir "$RUNNER_TEMP/review"
 
       - name: Validate model API key
@@ -121,6 +133,7 @@ jobs:
           fi
 
       - name: Run model review
+        timeout-minutes: 40
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
         run: >-
@@ -128,7 +141,7 @@ jobs:
           --review-dir "$RUNNER_TEMP/review" --policy .euler/QUALITY.md
 
       - name: Post review comment
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           PR_NUMBER: ${{ inputs.pr_number }}
         with:
@@ -136,42 +149,71 @@ jobs:
             const fs = require('fs');
             const path = `${process.env.RUNNER_TEMP}/review/report.md`;
             const body = fs.readFileSync(path, 'utf8');
-            const marker = '<!-- euler-quality-review -->';
             const issue_number = Number(process.env.PR_NUMBER);
             const { owner, repo } = context.repo;
-            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
-            const existing = comments.find((comment) => comment.body && comment.body.startsWith(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body });
-            }
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
 
+      # A failed or timed-out review still publishes a blocking check run, so
+      # the gate never goes missing. A run cancelled for a newer head stays
+      # quiet.
       - name: Publish quality-review check run
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        if: ${{ !cancelled() }}
+        timeout-minutes: 2
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           HEAD_SHA: ${{ inputs.head_sha }}
           FAIL_ON_BLOCK: ${{ inputs.fail_on_block }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
             const fs = require('fs');
-            const result = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/review/result.json`, 'utf8'));
-            const blocking = ['BLOCK', 'NEEDS-HUMAN'].includes(result.verdict);
-            const conclusion = blocking ? (process.env.FAIL_ON_BLOCK === 'true' ? 'failure' : 'neutral') : 'success';
+            let result = null;
+            let reportText = null;
+            try {
+              result = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/review/result.json`, 'utf8'));
+            } catch (error) {
+              core.warning(`quality review result unavailable: ${error.message}`);
+            }
+            try {
+              const raw = fs.readFileSync(`${process.env.RUNNER_TEMP}/review/report.md`, 'utf8');
+              reportText = raw.length > 65000
+                ? raw.slice(0, 65000) + '\n\n... (report truncated to 65k characters)'
+                : raw;
+            } catch (error) {
+              core.warning(`quality review report unavailable: ${error.message}`);
+            }
+            const blockingConclusion = process.env.FAIL_ON_BLOCK === 'true' ? 'failure' : 'neutral';
+            let conclusion;
+            let output;
+            if (result && typeof result.verdict === 'string') {
+              const blocking = ['BLOCK', 'NEEDS-HUMAN'].includes(result.verdict);
+              conclusion = blocking ? blockingConclusion : 'success';
+              output = {
+                title: `Euler quality review: ${result.verdict}`,
+                summary: `Verdict ${result.verdict}.`,
+                text: reportText || undefined,
+              };
+            } else {
+              conclusion = blockingConclusion;
+              output = {
+                title: 'Euler quality review: no verdict',
+                summary: `The review ended before a verdict. Workflow run: ${process.env.RUN_URL}`,
+                text: reportText || undefined,
+              };
+            }
             await github.rest.checks.create({
               ...context.repo,
               name: 'quality-review',
               head_sha: process.env.HEAD_SHA,
               status: 'completed',
               conclusion,
-              output: { title: `Euler quality review: ${result.verdict}`, summary: `Verdict ${result.verdict}.` },
+              output,
             });
 
       - name: Gate on verdict
         env:
           FAIL_ON_BLOCK: ${{ inputs.fail_on_block }}
         run: python3 .euler/ci/run_review.py gate "$RUNNER_TEMP/review/result.json" --fail-on-block "$FAIL_ON_BLOCK"
-
   fork-review:
     if: ${{ inputs.fork_review == true }}
     runs-on: ubuntu-latest
@@ -180,20 +222,25 @@ jobs:
       contents: read
       pull-requests: write
       checks: write
+    # A worst case of 20 chunks at two 600-second calls each exceeds any job
+    # bound. The model review step stops at 40 minutes. The remaining time lets
+    # the publish step post a blocking check run without a verdict.
+    timeout-minutes: 45
     concurrency:
       group: quality-review-${{ github.repository }}-${{ inputs.pr_number }}
       cancel-in-progress: true
     steps:
       - name: Checkout base revision
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: ${{ inputs.base_sha }}
-          # Full history keeps the base revision and ancestor commits available.
+          # Full history brings the same-repository head commit into the
+          # object store without a checkout.
           fetch-depth: 0
           persist-credentials: false
 
       - name: Fetch fork pull request head
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           ref: refs/pull/${{ inputs.pr_number }}/head
           fetch-depth: 0
@@ -202,7 +249,7 @@ jobs:
           allow-unsafe-pr-checkout: true
 
       - name: Checkout euler policy and adapter
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: abuzucom/euler
           ref: ${{ inputs.quality_ref }}
@@ -210,7 +257,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: '3.12'
 
@@ -222,10 +269,12 @@ jobs:
           PR_TITLE: ${{ inputs.pr_title }}
           PR_BODY: ${{ inputs.pr_body }}
           EXCLUDE_PATHS: ${{ inputs.exclude_paths }}
+          MAX_CHUNKS: ${{ inputs.max_chunks }}
         run: >-
           python3 .euler/ci/build_pr_case.py
           --repo . --base "$BASE_SHA" --head "$HEAD_SHA"
           --pr-number "$PR_NUMBER" --exclude "$EXCLUDE_PATHS"
+          --max-chunks "$MAX_CHUNKS"
           --out-dir "$RUNNER_TEMP/review"
 
       - name: Validate model API key
@@ -238,6 +287,7 @@ jobs:
           fi
 
       - name: Run model review
+        timeout-minutes: 40
         env:
           MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
         run: >-
@@ -245,7 +295,7 @@ jobs:
           --review-dir "$RUNNER_TEMP/review" --policy .euler/QUALITY.md
 
       - name: Post review comment
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           PR_NUMBER: ${{ inputs.pr_number }}
         with:
@@ -253,35 +303,65 @@ jobs:
             const fs = require('fs');
             const path = `${process.env.RUNNER_TEMP}/review/report.md`;
             const body = fs.readFileSync(path, 'utf8');
-            const marker = '<!-- euler-quality-review -->';
             const issue_number = Number(process.env.PR_NUMBER);
             const { owner, repo } = context.repo;
-            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
-            const existing = comments.find((comment) => comment.body && comment.body.startsWith(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body });
-            }
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
 
+      # A failed or timed-out review still publishes a blocking check run, so
+      # the gate never goes missing. A run cancelled for a newer head stays
+      # quiet.
       - name: Publish quality-review check run
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7.1.0
+        if: ${{ !cancelled() }}
+        timeout-minutes: 2
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           HEAD_SHA: ${{ inputs.head_sha }}
           FAIL_ON_BLOCK: ${{ inputs.fail_on_block }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           script: |
             const fs = require('fs');
-            const result = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/review/result.json`, 'utf8'));
-            const blocking = ['BLOCK', 'NEEDS-HUMAN'].includes(result.verdict);
-            const conclusion = blocking ? (process.env.FAIL_ON_BLOCK === 'true' ? 'failure' : 'neutral') : 'success';
+            let result = null;
+            let reportText = null;
+            try {
+              result = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/review/result.json`, 'utf8'));
+            } catch (error) {
+              core.warning(`quality review result unavailable: ${error.message}`);
+            }
+            try {
+              const raw = fs.readFileSync(`${process.env.RUNNER_TEMP}/review/report.md`, 'utf8');
+              reportText = raw.length > 65000
+                ? raw.slice(0, 65000) + '\n\n... (report truncated to 65k characters)'
+                : raw;
+            } catch (error) {
+              core.warning(`quality review report unavailable: ${error.message}`);
+            }
+            const blockingConclusion = process.env.FAIL_ON_BLOCK === 'true' ? 'failure' : 'neutral';
+            let conclusion;
+            let output;
+            if (result && typeof result.verdict === 'string') {
+              const blocking = ['BLOCK', 'NEEDS-HUMAN'].includes(result.verdict);
+              conclusion = blocking ? blockingConclusion : 'success';
+              output = {
+                title: `Euler quality review: ${result.verdict}`,
+                summary: `Verdict ${result.verdict}.`,
+                text: reportText || undefined,
+              };
+            } else {
+              conclusion = blockingConclusion;
+              output = {
+                title: 'Euler quality review: no verdict',
+                summary: `The review ended before a verdict. Workflow run: ${process.env.RUN_URL}`,
+                text: reportText || undefined,
+              };
+            }
             await github.rest.checks.create({
               ...context.repo,
               name: 'quality-review',
               head_sha: process.env.HEAD_SHA,
               status: 'completed',
               conclusion,
-              output: { title: `Euler quality review: ${result.verdict}`, summary: `Verdict ${result.verdict}.` },
+              output,
             });
 
       - name: Gate on verdict

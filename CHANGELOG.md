@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
-## [0.4.0] (2026-10-08)
+## [0.6.0] (2026-10-08)
 
 ### Added
 
@@ -15,6 +15,97 @@ loading `QUALITY.md` into a deployment.
   environment and validates `MODEL_API_KEY` before model access.
 - Added contract coverage for the same-repository and protected fork paths.
 - Clarified that only confirmed defects in the post-change code count as findings.
+- Rejected unexpected finding classes in the live golden-corpus evaluator.
+
+## [0.5.1] (2026-10-03)
+
+### Added
+
+- Recorded `abuzucom/xdj-rx3-emu` as an adopter in `adopters/xdj-rx3-emu.md`,
+  pinned at commit `b23947068a328c19215f8ade3db7bd2b4bcb05cc`.
+
+## [0.5.0] (2026-10-02)
+
+### Added
+
+- `ci/build_pr_case.py` takes an optional `--max-chunks`, 20 by default.
+  Files in chunks past the limit become unreviewed files.
+- `quality-review.yml` takes an optional `max_chunks` input, 20 by default.
+- `quality_checks.run_checks` takes an optional `parse_failures` list. The
+  list receives each path whose parse hits a recursion or memory limit.
+- `scripts/quality_checks/parser_limits.py` screens Python and TOML files for
+  parser limits in a child process. `quality_checks.find_parser_limit_files`
+  runs it.
+
+### Fixed
+
+- `ci/build_pr_case.py` reads changed paths with `git diff -z` and passes
+  them as literal pathspecs. A file name with spaces or non-ASCII characters
+  no longer hides its patch from the model and the prescan.
+- `ci/build_pr_case.py` reads every patch from one `git diff --raw -p` call.
+  Malformed output or a count mismatch falls back to one call per file.
+- `ci/build_pr_case.py` decodes numstat paths strictly as UTF-8. Non-UTF-8
+  paths are skipped and handled through the unreviewed list.
+- `ci/build_pr_case.py` verifies that `read_blobs` consumes all output bytes
+  from `git cat-file --batch`.
+- `scripts/quality_checks/parser_limits.py` narrows exception handling in
+  `hits_parser_limit` to `SyntaxError` and `tomllib.TOMLDecodeError`.
+- `QUALITY.md` prohibits reporting dismissed prescan candidates and intentional
+  documented changes as findings with severity ratings.
+- A path that is not valid UTF-8 and a text file with an empty patch become
+  unreviewed files.
+- The prescan reads head blobs with `git ls-tree` and `git cat-file`. A
+  `.gitattributes` `export-ignore` entry in the pull request no longer hides
+  files from the prescan.
+- `ci/run_review.py` fences the blocking prescan list, the unreviewed list,
+  and the validation problems in the PR comment. Each list shows at most 50
+  items of at most 300 characters. Control characters in an item become `?`.
+- `quality-review.yml` posts a new comment on each review run and populates
+  the check run text with the report markdown.
+- `ci/call_model.py` writes the provider error body to the job log only. The
+  `ModelCallError` message keeps the HTTP status.
+- The checkers skip a Python or TOML file that raises `RecursionError` or
+  `MemoryError` with a warning. The D5 import scan shares that handling.
+- The PR builder screens changed files for parser limits in a child process
+  before the checkers run. It removes each failing file from its extracted
+  tree and lists the file as unreviewed. The main process parses each file
+  once.
+- `security-review-pr.yml` trusts a `security-review` check run for dedupe
+  only when its summary names a default-branch run of this workflow
+  holding a `security-review-head-<sha>` marker artifact. `resolve-pr` gains
+  `actions: read`.
+- The `security-review-pr.yml` dedupe builds its run URL pattern from
+  `github.server_url`. Genuine runs match on GitHub Enterprise Server.
+- `security-review-pr.yml` reads the verdict token with `read -r` in place of
+  unquoted `set --`.
+- Set a 30-minute timeout on the `security-review-pr.yml` `review` job and a
+  45-minute timeout on the `quality-review.yml` `review` job.
+- `security-review-pr.yml` queues a second run for the same head instead of
+  cancelling the review in progress.
+- Documented the shared model key risk and the manual settings steps in
+  `docs/pr-security-review.md`.
+- A quality review that fails or times out before a verdict publishes a
+  blocking `quality-review` check run. The model review step stops after 40
+  minutes.
+- `docs/pr-security-review.md` states that a later spoofed check run with the
+  same name overrides the real result. The workflow review ruleset closes the
+  override. Requiring the GitHub Actions app does not.
+
+## [0.4.0] (2026-09-30)
+
+### Changed
+
+- Adopted the `abuzucom/rough` ruff baseline at commit
+  `b52aa382ebede9efb215e479f48cfb9c0b7a9272`. `ruff.toml` holds the block tier
+  and `ruff.warn.toml` the warn tier. `target-version` stays `py311`. The
+  baseline replaces the default rules plus the PL and S families.
+- `make lint` runs the block tier with `--ignore-noqa`, `ruff format --check`,
+  and the warn tier with `--exit-zero`.
+- Reformatted the Python sources and tests with `ruff format`.
+- `ci/call_model.py` posts over `http.client` with an HTTPS-only URL check in
+  place of `urllib.request.urlopen`. New tests cover the request, status, and
+  error paths.
+- Applied two safe block-tier fixes in `dependencies.py` and a test fixture.
 
 ## [0.3.0] (2026-09-30)
 
