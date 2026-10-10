@@ -142,7 +142,8 @@ def render_report(manifest: dict, chunks: list[ChunkResult], prescan: list[dict]
     for chunk in chunks:
         lines += ["", f"### Chunk {chunk.envelope}: {chunk.verdict}", ""]
         if chunk.problems:
-            lines += ["Validation problems:", "", fenced_list(chunk.problems)]
+            validation_items = [f"Validation: {problem}" for problem in chunk.problems]
+            lines += ["Validation problems:", "", fenced_list(validation_items)]
         if chunk.report:
             lines += ["", fence(chunk.report)]
     return "\n".join(lines) + "\n"

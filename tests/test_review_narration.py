@@ -97,18 +97,13 @@ class ReviewNarrationTest(unittest.TestCase):
         def narrated_model(system_prompt: str, mode: str, case_text: str) -> str:
             nonlocal calls
             calls += 1
-            return (
-                "I'll review this PR carefully.\n"
-                "VERDICT: APPROVE - No findings.\n"
-                "VERDICT_JSON: "
-                + json.dumps({
-                    "schema_version": "1",
-                    "mode": "PR",
-                    "verdict": "APPROVE",
-                    "findings": [],
-                    "prescan": [],
-                })
-            )
+            return "I'll review this PR carefully.\nVERDICT: APPROVE - No findings.\nVERDICT_JSON: " + json.dumps({
+                "schema_version": "1",
+                "mode": "PR",
+                "verdict": "APPROVE",
+                "findings": [],
+                "prescan": [],
+            })
 
         result = run_review.review_chunk(
             "chunk-001",
