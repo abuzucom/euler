@@ -7,6 +7,8 @@ purpose. The repository self-scan skips tests/ for that reason.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import subprocess
 import sys
@@ -21,6 +23,10 @@ import quality_checks  # resolved through the path set above
 
 MARKER = "TO" + "DO"
 NOQA = "# no" + "qa"
+# Nesting deep enough to exhaust the Python and TOML parsers.
+DEEP_PYTHON = "x = " + "-" * 100_000 + "1\n"
+TOML_DEPTH = 5_000
+DEEP_TOML = "a = " + "[" * TOML_DEPTH + "]" * TOML_DEPTH + "\n"
 
 
 class CheckerCase(unittest.TestCase):
@@ -108,14 +114,18 @@ class RecursionCheckTest(CheckerCase):
 
 class ResourceLeakCheckTest(CheckerCase):
     def test_open_without_with(self) -> None:
-        self.assert_flags("resource-leak", "Q11", {"a.py": "def f(p):\n    handle = open(p)\n    return handle.read()\n"})
+        self.assert_flags(
+            "resource-leak", "Q11", {"a.py": "def f(p):\n    handle = open(p)\n    return handle.read()\n"}
+        )
 
     def test_db_connect_without_close(self) -> None:
         source = "import sqlite3\ndef f():\n    conn = sqlite3.connect('x.db')\n    return conn.execute('select 1')\n"
         self.assert_flags("resource-leak", "Q11", {"a.py": source})
 
     def test_with_block_clean(self) -> None:
-        self.assert_clean("resource-leak", "Q11", {"a.py": "def f(p):\n    with open(p) as handle:\n        return handle.read()\n"})
+        self.assert_clean(
+            "resource-leak", "Q11", {"a.py": "def f(p):\n    with open(p) as handle:\n        return handle.read()\n"}
+        )
 
     def test_finally_close_clean(self) -> None:
         source = "def f(p):\n    handle = open(p)\n    try:\n        return handle.read()\n    finally:\n        handle.close()\n"
@@ -246,7 +256,9 @@ class UnpinnedCheckTest(CheckerCase):
         self.assert_flags("unpinned", "D1", {"requirements.txt": "requests>=2.0\n"})
 
     def test_pyproject_range(self) -> None:
-        self.assert_flags("unpinned", "D1", {"pyproject.toml": '[project]\nname = "x"\ndependencies = ["httpx~=0.27"]\n'})
+        self.assert_flags(
+            "unpinned", "D1", {"pyproject.toml": '[project]\nname = "x"\ndependencies = ["httpx~=0.27"]\n'}
+        )
 
     def test_cargo_default_caret(self) -> None:
         self.assert_flags("unpinned", "D1", {"Cargo.toml": '[dependencies]\nserde = "1.0"\n'})
@@ -314,6 +326,51 @@ class UnusedDepsCheckTest(CheckerCase):
     def test_python_mapped_name_clean(self) -> None:
         files = {"requirements.txt": "PyYAML==6.0.2\n", "app.py": "import yaml\n"}
         self.assert_clean("unused-deps", "D5", files)
+
+
+class ParserLimitTest(CheckerCase):
+    def test_deep_python_skipped_without_crash(self) -> None:
+        paths = self.write_files({"deep.py": DEEP_PYTHON})
+        with contextlib.redirect_stderr(io.StringIO()):
+            findings = quality_checks.run_checks(list(quality_checks.CHECKS), paths, self.root)
+            self.assertTrue(quality_checks.exceeds_parser_limits(paths[0]))
+        self.assertEqual(findings, [])
+
+    def test_deep_toml_skipped_without_crash(self) -> None:
+        paths = self.write_files({"pyproject.toml": DEEP_TOML})
+        with contextlib.redirect_stderr(io.StringIO()):
+            findings = quality_checks.run_checks(["unpinned", "unused-deps"], paths, self.root)
+            self.assertTrue(quality_checks.exceeds_parser_limits(paths[0]))
+        self.assertEqual(findings, [])
+
+    def test_child_finds_parser_limit_files(self) -> None:
+        files = {"deep.py": DEEP_PYTHON, "pyproject.toml": DEEP_TOML, "ok.py": "A = 1\n", "broken.py": "def f(:\n"}
+        paths = self.write_files(files)
+        found = quality_checks.find_parser_limit_files(paths)
+        self.assertEqual(sorted(path.name for path in found), ["deep.py", "pyproject.toml"])
+
+    def test_run_checks_records_parse_failures(self) -> None:
+        paths = self.write_files({"deep.py": DEEP_PYTHON, "ok.py": "A = 1\n"})
+        failures: list[str] = []
+        with contextlib.redirect_stderr(io.StringIO()):
+            quality_checks.run_checks(list(quality_checks.CHECKS), paths, self.root, parse_failures=failures)
+        self.assertEqual(failures, ["deep.py"])
+
+    def test_unused_deps_skips_deep_python(self) -> None:
+        self.write_files({"requirements.txt": "requests==2.32.3\n", "deep.py": DEEP_PYTHON})
+        with contextlib.redirect_stderr(io.StringIO()):
+            findings = quality_checks.run_checks(["unused-deps"], [self.root], self.root)
+        self.assertEqual({finding.class_id for finding in findings}, {"D5"})
+
+    def test_syntax_error_within_parser_limits(self) -> None:
+        paths = self.write_files({"broken.py": "def f(:\n", "ok.toml": "a = 1\n"})
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertFalse(quality_checks.exceeds_parser_limits(paths[0]))
+        self.assertFalse(quality_checks.exceeds_parser_limits(paths[1]))
+
+    def test_toml_decode_error_within_parser_limits(self) -> None:
+        paths = self.write_files({"broken.toml": "a = \n"})
+        self.assertFalse(quality_checks.exceeds_parser_limits(paths[0]))
 
 
 class CommandLineTest(CheckerCase):

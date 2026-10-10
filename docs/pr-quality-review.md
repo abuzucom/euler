@@ -14,32 +14,52 @@ a report with a machine-readable verdict. The check fails on `BLOCK` or
    from the workflow run `head_sha`.
 4. A same-repository pull request calls `quality-review.yml` without setting
    `fork_review`. The default selects the existing `review` job.
-5. An adopter can set `fork_review: true` to select `fork-review`. The job
-   waits for the adopter's `fork-review` environment protection rules.
-6. The fork job fetches `refs/pull/<number>/head` after approval. It reads PR
-   files as data and never executes them.
-7. The caller can provide `MODEL_API_KEY` as a reusable-workflow secret. A
-   fork adopter can instead configure `MODEL_API_KEY` as an environment secret.
-   The job fails before a model request when the key is empty.
-8. The reusable workflow allows one active review per pull request. A newer
-   head cancels an obsolete run.
-9. Both execution paths keep the base and head commits in the object store.
-   The same-repository path does not check out the pull request head.
-10. The workflow checks out `abuzucom/euler` at `quality_ref` into `.euler`.
-11. `ci/build_pr_case.py` writes one or more review envelopes.
-12. `ci/run_review.py review` calls the model once per envelope.
-13. `ci/check_review_response.py` validates each report, including process
+5. The repository caller skips fork pull requests. An adopter caller can set
+   `fork_review: true` to select `fork-review`.
+6. A read-only preparation job checks out the trusted workflow revision and
+   fetches review commits into the Git object database. For fork reviews, it
+   verifies that the fetched head matches `head_sha`. It builds and uploads
+   review envelopes without receiving the model key or executing PR files.
+7. The selected model job downloads the review artifact. The fork model job
+   waits for the adopter's `fork-review` environment protection rules before
+   any job step runs. Both model jobs validate `MODEL_API_KEY` before a model
+   request. PR files remain data and never run as code.
+8. The caller maps its accessible `OLLAMA_API_KEY` secret to `MODEL_API_KEY`.
+   An adopter can instead configure `MODEL_API_KEY` in the environment.
+   The selected secret remains unavailable until environment approval. The job
+   fails before a model request when the key is empty.
+9. The reusable workflow allows one active review per pull request. A newer
+   head cancels an obsolete run. The review job stops after 45 minutes. The
+   `max_chunks` input caps envelopes at 20 by default. The model step stops
+   after 40 minutes. A run without a verdict publishes a blocking check.
+10. The preparation job fetches the base commit by its full SHA. The
+    same-repository path fetches the head commit by its full SHA. The fork
+    path fetches the pull request ref and rejects a head mismatch.
+11. Both execution paths check out `abuzucom/euler` at `quality_ref` into
+    `.euler`.
+12. `ci/build_pr_case.py` writes one or more review envelopes.
+13. `ci/run_review.py review` calls the model once per envelope.
+14. `ci/check_review_response.py` validates each report, including process
     narration. An invalid report triggers one retry with the problems attached.
-14. The workflow posts one PR comment and a `quality-review` check run.
-15. `ci/run_review.py gate` fails the job on a blocking verdict.
+15. The workflow posts one PR comment and a `quality-review` check run.
+16. `ci/run_review.py gate` fails the job on a blocking verdict.
 
 ## Envelope and prescan
 
 `ci/build_pr_case.py` reads the diff and the head tree from git objects. The
-builder extracts the head tree with the tarfile data filter. It runs
-`scripts/check_code_quality.py` checks on changed files. It keeps candidates
-on added lines. Project-level classes C3, D2, and D5 keep candidates in
-changed files.
+builder reads changed paths and every patch from one NUL-separated
+`git diff --raw -p` call. Git receives each fallback path as a literal
+pathspec. A path with spaces, quotes, or non-ASCII characters keeps its full
+patch.
+
+The builder writes the head tree's regular files from `git ls-tree` and
+`git cat-file` output. The head commit's `export-ignore` and `export-subst`
+attributes have no effect on the scanned tree. The builder skips symlinks and
+submodules.
+
+The builder runs `scripts/check_code_quality.py` checks on changed files. It
+keeps candidates on added lines. Project-level classes C3, D2, and D5 keep
+candidates in changed files.
 
 The envelope from `scripts/review_envelope.py` holds two channels:
 
@@ -54,22 +74,49 @@ item in the `prescan` array of `VERDICT_JSON`.
 - The worst chunk verdict wins. BLOCK outranks NEEDS-HUMAN. NEEDS-HUMAN
   outranks APPROVE.
 - A blocking prescan finding from Q11, M1, M12, or M13 forces BLOCK.
-- A binary file or a file over the chunk budget becomes an unreviewed file.
-  Unreviewed files force NEEDS-HUMAN.
-- A model call failure forces NEEDS-HUMAN for that chunk.
+- These files become unreviewed files:
+  - a binary file
+  - a file over the chunk budget
+  - a file in a chunk past `--max-chunks`, 20 by default
+  - a path that is not valid UTF-8
+  - a text file with an empty patch
+  - a Python or TOML file that exhausts parser recursion depth or memory.
+    A child process screens changed files first. The builder removes a
+    failing file from its extracted tree before the checkers run.
+- Unreviewed files force NEEDS-HUMAN.
+- A model call failure forces NEEDS-HUMAN for that chunk. The comment omits the
+  provider error body. The job log holds it.
 - A report failing validation twice forces NEEDS-HUMAN for that chunk. The
   comment shows validation problems and omits the invalid model text.
 
+## PR comment and check run
+
+Each review run posts a new comment on the pull request. The comment places
+the blocking prescan list, the unreviewed file list, the validation problems,
+and each model report inside code fences. Pull request paths and model text
+cannot render as markdown, images, links, or mentions. Each list shows at most
+50 items of at most 300 characters.
+
+The `quality-review` check run page includes the report text in its details.
+
 ## Trust boundary
 
-The caller runs default-branch code. The workflow never executes a pull
-request file. Pull request titles and bodies reach scripts through environment
-variables only. No workflow step places pull request text in shell syntax.
-Every checkout sets `persist-credentials: false`.
+The caller runs default-branch code. The preparation job checks out the
+trusted workflow revision and never checks out or executes a pull request
+file. It fetches review commits into Git objects and pins fork review input to
+the requested head SHA. The preparation job has read-only repository
+permissions and receives no model key. Model jobs receive only the generated
+review artifact. Pull request titles and bodies reach scripts through
+environment variables only. No workflow step places pull request text in
+shell syntax. Every checkout sets `persist-credentials: false`.
 
 The provider receives `QUALITY.md` and the review envelope. The provider
 receives no GitHub token and no other repository secret.
 `ci/call_model.py` sends requests only to endpoints in `ALLOWED_ENDPOINTS`.
+
+A same-repository branch can add a `pull_request` workflow that reads a
+repository secret. `docs/pr-security-review.md` lists the residual risk for
+the shared model key and the manual settings steps.
 
 ## Adoption in another repository
 
@@ -80,15 +127,14 @@ the caller. The adopter supplies these items:
 - a caller workflow
 - a provider API key mapped to `MODEL_API_KEY`
 - `fork_review: true` for fork pull requests that require environment approval
-- a `fork-review` environment with protection rules and a `MODEL_API_KEY`
-  environment secret for that protected path
+- a `fork-review` environment with protection rules
+- optionally, a `MODEL_API_KEY` environment secret for the protected path
 - an `adopters/<repo>.md` record per `adopters/README.md`
 
-Same-repository callers can omit `fork_review` and keep mapping a repository or
-organization secret to `MODEL_API_KEY`. Fork callers can map an accessible
-`OLLAMA_API_KEY` secret to `MODEL_API_KEY` instead of configuring an environment
-secret. If both sources use the `MODEL_API_KEY` name, the environment secret
-takes precedence in the protected job.
+Same-repository callers can omit `fork_review` and map the repository or
+organization `OLLAMA_API_KEY` secret to `MODEL_API_KEY`. Fork callers can use
+the same mapping. If an environment secret also defines `MODEL_API_KEY`, that
+environment value takes precedence in the protected job.
 
 The workflow checks out `abuzucom/euler` without credentials beyond the
 caller token. An adopter outside the `abuzucom` organization needs read access

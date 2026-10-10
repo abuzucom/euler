@@ -152,11 +152,12 @@ def evaluate_response(case: Case, response: str) -> list[str]:
     if expected["expect_json"] and report.payload is None:
         failures.append(report.json_error or "missing VERDICT_JSON")
     if report.payload is not None:
-        reported = {
-            item.get("class")
-            for item in report.payload.get("findings", [])
-            if isinstance(item, dict) and isinstance(item.get("class"), str)
-        }
+        reported: set[str] = set()
+        for item in report.payload.get("findings", []):
+            if isinstance(item, dict):
+                class_id = item.get("class")
+                if isinstance(class_id, str):
+                    reported.add(class_id)
         expected_classes = set(expected["expected_classes"])
         failures.extend(f"missing expected class {item}" for item in sorted(expected_classes - reported))
         failures.extend(f"unexpected class {item}" for item in sorted(reported - expected_classes))

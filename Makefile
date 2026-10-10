@@ -19,8 +19,14 @@ eval:
 	$(PYTHON) eval/run_eval.py
 
 # Needs the tools from requirements-dev.txt. make check stays standard-library only.
+# The ruff steps follow the abuzucom/rough baseline. --ignore-noqa makes
+# suppression comments ineffective. The warn tier reports and never fails.
+RUFF_PATHS = scripts ci eval/run_eval.py tests
+
 lint:
-	$(PYTHON) -m ruff check scripts ci eval/run_eval.py tests
+	$(PYTHON) -m ruff check --ignore-noqa $(RUFF_PATHS)
+	$(PYTHON) -m ruff format --check $(RUFF_PATHS)
+	$(PYTHON) -m ruff check --config ruff.warn.toml --ignore-noqa --exit-zero $(RUFF_PATHS)
 	$(PYTHON) -m mypy
 	$(PYTHON) -m yamllint --strict .github .yamllint.yml
 
