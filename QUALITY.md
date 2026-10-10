@@ -272,6 +272,13 @@ in PR mode force NEEDS-HUMAN. Never sample silently.
 
 Collapse repeated Advisory findings of one class into one entry with a count and the locations.
 
+Perform the review analysis before writing the report. Output only final
+conclusions, evidence, and required coverage. Omit progress updates,
+first-person process narration, questions to yourself, repeated reconsideration,
+draft findings, and generic introductions. Keep reasoning out of the report.
+State findings directly and concisely. Preserve the required evidence and
+explanations.
+
 Resolve every prescan item from the review envelope. Confirm it as a finding or dismiss it with a reason.
 
 Report only confirmed, in-scope defects that remain in the post-change HEAD state. The base side of a diff is

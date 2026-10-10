@@ -8,6 +8,19 @@ from dataclasses import dataclass
 
 FINAL_LINE = re.compile(r"^(?P<label>VERDICT|RISK \(partial\)|RISK):\s*(?P<value>\S.*)$")
 JSON_PREFIX = "VERDICT_JSON:"
+MARKDOWN_FENCE_LENGTH = 3
+OUTER_FENCE_LINE_COUNT = 2
+BACKTICK_CODEPOINT = 96
+PROCESS_NARRATION = re.compile(
+    r"\b(?:I(?:'m|'ll|'ve|'d)?\s+(?:review|analy[sz]e|identify|need|should|must|"
+    r"can|cannot|can't|think|believe|see|find|verify|confirm|check|recheck|"
+    r"reconsider|look|start|trace|read|inspect|apply|want|have|"
+    r"only\s+(?:see|have|know))\b|"
+    r"let\s+me\b|need\s+to\s+(?:verify|check|confirm|read|inspect|trace)\b|"
+    r"^\s*(?:wait|actually|reconsider(?:ing)?)\b)",
+    re.IGNORECASE | re.MULTILINE,
+)
+INLINE_CODE_SPAN = re.compile(chr(96) + r"[^" + chr(96) + r"]*" + chr(96))
 
 
 @dataclass(frozen=True)
@@ -20,6 +33,29 @@ class ParsedReport:
     final_line_count: int
     payload: dict | None
     json_error: str | None
+
+
+def contains_process_narration(text: str) -> bool:
+    """Return True when report prose exposes review process narration."""
+    lines = text.splitlines()
+    fence_marker = chr(BACKTICK_CODEPOINT) * MARKDOWN_FENCE_LENGTH
+    outer_fence = (
+        len(lines) >= OUTER_FENCE_LINE_COUNT
+        and lines[0].strip().startswith(fence_marker)
+        and lines[-1].strip().startswith(fence_marker)
+    )
+    if outer_fence:
+        lines = lines[1:-1]
+    prose_lines = []
+    in_fence = False
+    for line in lines:
+        if line.strip().startswith(fence_marker):
+            in_fence = not in_fence
+            continue
+        if in_fence or line.startswith(JSON_PREFIX):
+            continue
+        prose_lines.append(INLINE_CODE_SPAN.sub("", line))
+    return bool(PROCESS_NARRATION.search("\n".join(prose_lines)))
 
 
 def parse_payload(lines: list[str]) -> tuple[dict | None, str | None]:

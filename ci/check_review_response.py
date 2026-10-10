@@ -110,6 +110,8 @@ def validate(text: str, context: ReviewContext, classes: dict) -> list[str]:
     """Return every problem in one report. An empty list means valid."""
     report = review_report.parse_report(text)
     problems = []
+    if review_report.contains_process_narration(text):
+        problems.append("report contains process narration")
     if context.mode == "PR" and (report.label != "VERDICT" or report.final_line_count != 1):
         problems.append(f"expected exactly one final VERDICT line, found {report.final_line_count}")
     if report.payload is None:

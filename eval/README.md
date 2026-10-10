@@ -84,6 +84,7 @@ eval/cases/<slug>/
 | `request-cache-pr` | PR | `BLOCK` | Q2 |
 | `resolved-q4-pr` | PR | `APPROVE` | none |
 | `resource-leak-pr` | PR | `BLOCK` | Q11 |
+| `review-narration-pr` | PR | `APPROVE` | none |
 | `security-only-pr` | PR | `APPROVE` | none |
 | `superseded-major-pr` | PR | `APPROVE` | D6 |
 | `suppressed-check-pr` | PR | `BLOCK` | M13 |

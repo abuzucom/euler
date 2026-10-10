@@ -86,7 +86,7 @@ def review_chunk(name: str, envelope_text: str, unreviewed: list[str], policy: P
             parsed = review_report.parse_report(report)
             return ChunkResult(name, parsed.token or "NEEDS-HUMAN", report, [])
         case_text = with_retry_note(envelope_text, problems)
-    return ChunkResult(name, "NEEDS-HUMAN", report, problems)
+    return ChunkResult(name, "NEEDS-HUMAN", "", problems)
 
 
 def fence(text: str) -> str:

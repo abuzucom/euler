@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.5.0] (2026-10-10)
+
+### Added
+
+- Added a review output rule that excludes self-narration.
+- Added a validator and evaluation case for process narration.
+- Omitted model text after repeated response validation failures.
+
 ## [0.4.0] (2026-10-08)
 
 ### Added
