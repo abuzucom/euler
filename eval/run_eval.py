@@ -85,6 +85,9 @@ def validate_expected(case: Case, known_classes: set[str]) -> list[str]:
         problems.append("expect_json must be a boolean")
     if not isinstance(expected["notes"], str) or not expected["notes"].strip():
         problems.append("notes must be a non-empty string")
+    narration_required = expected.get("forbid_process_narration")
+    if "forbid_process_narration" in expected and not isinstance(narration_required, bool):
+        problems.append("forbid_process_narration must be a boolean")
     return problems
 
 
@@ -142,6 +145,8 @@ def evaluate_response(case: Case, response: str) -> list[str]:
     expected = case.expected
     failures = []
     final_line = f"{report.label}: {report.value}" if report.label else ""
+    if expected.get("forbid_process_narration") and review_report.contains_process_narration(response):
+        failures.append("report contains process narration")
     if expected["expected_verdict"] not in final_line:
         failures.append(f"expected verdict '{expected['expected_verdict']}' in final line '{final_line}'")
     if expected["expect_json"] and report.payload is None:

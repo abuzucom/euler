@@ -39,8 +39,8 @@ a report with a machine-readable verdict. The check fails on `BLOCK` or
     `.euler`.
 12. `ci/build_pr_case.py` writes one or more review envelopes.
 13. `ci/run_review.py review` calls the model once per envelope.
-14. `ci/check_review_response.py` validates each report. An invalid report
-    triggers one retry with the problems attached.
+14. `ci/check_review_response.py` validates each report, including process
+    narration. An invalid report triggers one retry with the problems attached.
 15. The workflow posts one PR comment and a `quality-review` check run.
 16. `ci/run_review.py gate` fails the job on a blocking verdict.
 
@@ -86,7 +86,8 @@ item in the `prescan` array of `VERDICT_JSON`.
 - Unreviewed files force NEEDS-HUMAN.
 - A model call failure forces NEEDS-HUMAN for that chunk. The comment omits the
   provider error body. The job log holds it.
-- A report failing validation twice forces NEEDS-HUMAN for that chunk.
+- A report failing validation twice forces NEEDS-HUMAN for that chunk. The
+  comment shows validation problems and omits the invalid model text.
 
 ## PR comment and check run
 

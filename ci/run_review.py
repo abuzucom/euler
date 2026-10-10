@@ -90,7 +90,7 @@ def review_chunk(name: str, envelope_text: str, unreviewed: list[str], policy: P
             parsed = review_report.parse_report(report)
             return ChunkResult(name, parsed.token or "NEEDS-HUMAN", report, [])
         case_text = with_retry_note(envelope_text, problems)
-    return ChunkResult(name, "NEEDS-HUMAN", report, problems)
+    return ChunkResult(name, "NEEDS-HUMAN", "", problems)
 
 
 def fence(text: str) -> str:
@@ -142,7 +142,8 @@ def render_report(manifest: dict, chunks: list[ChunkResult], prescan: list[dict]
     for chunk in chunks:
         lines += ["", f"### Chunk {chunk.envelope}: {chunk.verdict}", ""]
         if chunk.problems:
-            lines += ["Validation problems:", "", fenced_list(chunk.problems)]
+            validation_items = [f"Validation: {problem}" for problem in chunk.problems]
+            lines += ["Validation problems:", "", fenced_list(validation_items)]
         if chunk.report:
             lines += ["", fence(chunk.report)]
     return "\n".join(lines) + "\n"
