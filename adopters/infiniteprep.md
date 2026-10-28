@@ -12,8 +12,8 @@ record assumes.
 ## Wiring
 
 - `.github/workflows/quality-review-pr.yml` mirrors this repository's caller.
-  It triggers on completion of the adopter's `ci` workflow. The wiring lands
-  in draft pull request abuzucom/infiniteprep#1.
+  It triggers on completion of the adopter's `ci` workflow. The wiring landed
+  in pull request abuzucom/infiniteprep#1.
 - The review job grants `actions: read` beside `contents: read`,
   `pull-requests: write`, and `checks: write`. The reusable review job
   requests each of these permissions.
