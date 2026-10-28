@@ -37,3 +37,6 @@ in workflows even when a tag exists.
 - `abuzucom/xdj-rx3-emu` pins `quality-review.yml` and `quality_ref` to
   commit `b23947068a328c19215f8ade3db7bd2b4bcb05cc`. See
   [`xdj-rx3-emu.md`](xdj-rx3-emu.md).
+- `abuzucom/infiniteprep` pins `quality-review.yml` and `quality_ref` to
+  commit `1a3f67cba9d6ed7f45af4822f9ca27dd14db6a46`. See
+  [`infiniteprep.md`](infiniteprep.md).

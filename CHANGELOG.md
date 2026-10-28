@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.6.6] (2026-10-28)
+
+### Added
+
+- Record the `abuzucom/infiniteprep` adoption in
+  `adopters/infiniteprep.md`.
+
 ## [0.6.5] (2026-10-10)
 
 ### Added
