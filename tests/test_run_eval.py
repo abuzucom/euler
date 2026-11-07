@@ -125,6 +125,32 @@ class LiveEvaluationTest(CaseFixture):
         self.assertEqual(envelope["REVIEW_TARGET"]["context"], "Adds a handler.")
         self.assertIn("sha256", envelope["REVIEW_TARGET"])
 
+    def test_timeout_metadata_and_status_are_enforced(self) -> None:
+        expected = self.valid_expected(
+            expected_verdict="NEEDS-HUMAN",
+            expected_classes=[],
+            expected_review_status="NEEDS-HUMAN",
+            active_work_elapsed_seconds=600,
+        )
+        case_dir = self.write_case("timeout-pr", expected, {"diff.patch": "+x\n"})
+        case = run_eval.load_case(case_dir)
+        envelope = json.loads(run_eval.build_case_text(case, case_dir))
+        self.assertEqual(
+            envelope["TRUSTED_CONTEXT"]["metadata"]["active_work_elapsed_seconds"],
+            600,
+        )
+        response = (
+            "VERDICT: NEEDS-HUMAN - active work time limit reached.\n"
+            'VERDICT_JSON: {"schema_version":"1","mode":"PR",'
+            '"verdict":"NEEDS-HUMAN","findings":[],"prescan":[]}\n'
+        )
+        failures = run_eval.evaluate_response(case, response)
+        self.assertTrue(any("missing expected review status" in item for item in failures))
+        response_with_status = (
+            "REVIEW STATUS: NEEDS-HUMAN - active review time limit reached.\n" + response
+        )
+        self.assertEqual(run_eval.evaluate_response(case, response_with_status), [])
+
 
 if __name__ == "__main__":
     unittest.main()
