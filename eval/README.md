@@ -58,6 +58,7 @@ eval/cases/<slug>/
 
 | Case | Mode | Verdict | Classes |
 |---|---|---|---|
+| `active-review-timeout-pr` | PR | `NEEDS-HUMAN` | none |
 | `advisory-bundle-pr` | PR | `APPROVE` | M2, M7, M8 |
 | `api-break-pr` | PR | `NEEDS-HUMAN` | M6 |
 | `broad-catch-file` | File | `RISK: MEDIUM` | M16 |

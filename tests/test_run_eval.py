@@ -81,6 +81,22 @@ class StructureTest(CaseFixture):
         self.write_case("no-notes", self.valid_expected(notes=""), {"diff.patch": ""})
         self.assertIn("no-notes: notes must be a non-empty string", run_eval.validate_corpus(self.cases))
 
+    def test_invalid_active_work_elapsed_fails(self) -> None:
+        cases = (
+            (True, "bad-timeout-bool"),
+            ("600", "bad-timeout-string"),
+            (-1, "bad-timeout-negative"),
+        )
+        for value, slug in cases:
+            self.write_case(slug, self.valid_expected(active_work_elapsed_seconds=value), {"diff.patch": ""})
+        problems = run_eval.validate_corpus(self.cases)
+        for _, slug in cases:
+            self.assertIn(f"{slug}: active_work_elapsed_seconds must be a non-negative integer", problems)
+
+    def test_bad_review_status_fails(self) -> None:
+        self.write_case("bad-status", self.valid_expected(expected_review_status="APPROVE"), {"diff.patch": ""})
+        self.assertIn("bad-status: expected_review_status must be NEEDS-HUMAN", run_eval.validate_corpus(self.cases))
+
 
 class ReportParsingTest(unittest.TestCase):
     def test_parses_final_line_and_json(self) -> None:

@@ -2,7 +2,7 @@
 
 > **Scope:** review a pull request, file, fragment, or whole codebase for code quality and conventions.
 > **Boundary:** `abuzucom/foucault` owns security review. Section 9 routes security findings there.
-> **Application:** sections 1, 2, 3, 4, 4a, 6, 8, and 9 apply in every mode. Sections 5 and 7 vary by mode.
+> **Application:** sections 1, 1a, 2, 3, 4, 4a, 6, 8, and 9 apply in every mode. Sections 5 and 7 vary by mode.
 
 ## 0. Review Modes
 
@@ -35,7 +35,7 @@ Apply diff, history, and manifest rules in PR mode. In other modes, inspect the 
   unseen code.
 7. **Specify fixes.** Recommend a concrete, stack-appropriate fix for every finding.
 
-## Investigation Efficiency and Time Limit
+## 1a. Investigation Efficiency and Time Limit
 
 - When trusted context supplies successful same-head CI results, skip equivalent local checks. In manual reviews,
   rerun only relevant checks with missing, stale, or inconclusive results.
