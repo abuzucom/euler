@@ -123,7 +123,7 @@ class QualityReviewWorkflowContractTests(unittest.TestCase):
         self.assertIn("      - name: Fetch review commits", prepare_text)
         self.assertIn("      - name: Build review envelopes", prepare_text)
         self.assertIn("      - name: Upload review envelopes", prepare_text)
-        self.assertIn("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", prepare_text)
+        self.assertIn("actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9", prepare_text)
         self.assertIn("artifact_id: ${{ steps.upload-review.outputs.artifact-id }}", prepare_text)
 
     def test_model_secret_is_optional_at_boundary_and_fails_closed(self) -> None:

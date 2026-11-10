@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.7.1] (2026-11-09)
+
+### Changed
+
+- Bump `actions/setup-python` to v7.1.0, `actions/upload-artifact` to
+  v7.0.2, and `github/codeql-action` to v4.39.1, all pinned by full commit
+  SHA.
+- Update the workflow contract test pin to `upload-artifact` v7.0.2 in the
+  same change.
+
 ## [0.7.0] (2026-11-09)
 
 ### Added
