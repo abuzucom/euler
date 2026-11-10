@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.8.0] (2026-11-09)
+
+### Added
+
+- Updated the foucault integration pin to v3.7.1 and ported the upstream
+  capacity handling, verdict-record dedupe, and pin verification.
+- Hardened the review against API-derived checkout refs. The worktree stays
+  on the repository's default branch, the base and head arrive as git
+  objects, and the reusable workflow pins `model_call_command` to the
+  trusted adapter.
+- Moved the review implementation into a reusable `security-review.yml`.
+  Both execution paths call it as a local reusable workflow.
+- Ported the upstream fork review. A fork pull request runs the protected
+  `fork-review` path after its author or a maintainer applies the
+  `safe-to-review` label and an admin approves the environment gate.
+- Ported the upstream compliance runner. `immutable-conflict-check.yml`
+  scans every pull request tree with the vendored checker before a fork
+  review, and the security review now triggers after it. The vendored
+  checker set carries euler's branch-prefix configuration and a hash-pinned
+  `requirements-checkers.txt`.
+
 ## [0.7.1] (2026-11-09)
 
 ### Changed
