@@ -85,6 +85,12 @@ def validate_expected(case: Case, known_classes: set[str]) -> list[str]:
         problems.append("expect_json must be a boolean")
     if not isinstance(expected["notes"], str) or not expected["notes"].strip():
         problems.append("notes must be a non-empty string")
+    elapsed = expected.get("active_work_elapsed_seconds")
+    if elapsed is not None and (isinstance(elapsed, bool) or not isinstance(elapsed, int) or elapsed < 0):
+        problems.append("active_work_elapsed_seconds must be a non-negative integer")
+    review_status = expected.get("expected_review_status")
+    if review_status is not None and review_status != "NEEDS-HUMAN":
+        problems.append("expected_review_status must be NEEDS-HUMAN")
     narration_required = expected.get("forbid_process_narration")
     if "forbid_process_narration" in expected and not isinstance(narration_required, bool):
         problems.append("forbid_process_narration must be a boolean")
@@ -134,7 +140,10 @@ def prescan_for(case: Case, case_dir: Path) -> list[dict]:
 
 def build_case_text(case: Case, case_dir: Path) -> str:
     """Return the review envelope for one case."""
-    metadata = {"source": "eval", "case": case.slug}
+    metadata: dict[str, str | int] = {"source": "eval", "case": case.slug}
+    elapsed = case.expected.get("active_work_elapsed_seconds")
+    if elapsed is not None:
+        metadata["active_work_elapsed_seconds"] = elapsed
     prescan = prescan_for(case, case_dir)
     return review_envelope.build_envelope(case.expected["mode"], case.files, case.context, prescan, metadata)
 
@@ -149,6 +158,11 @@ def evaluate_response(case: Case, response: str) -> list[str]:
         failures.append("report contains process narration")
     if expected["expected_verdict"] not in final_line:
         failures.append(f"expected verdict '{expected['expected_verdict']}' in final line '{final_line}'")
+    expected_status = expected.get("expected_review_status")
+    if expected_status is not None:
+        status_prefix = f"REVIEW STATUS: {expected_status}"
+        if not any(line.startswith(status_prefix) for line in response.splitlines()):
+            failures.append(f"missing expected review status {expected_status}")
     if expected["expect_json"] and report.payload is None:
         failures.append(report.json_error or "missing VERDICT_JSON")
     if report.payload is not None:

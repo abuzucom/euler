@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
-## [0.6.7] (2026-11-09)
+## [0.7.1] (2026-11-09)
 
 ### Changed
 
@@ -15,6 +15,13 @@ loading `QUALITY.md` into a deployment.
   SHA.
 - Update the workflow contract test pin to `upload-artifact` v7.0.2 in the
   same change.
+
+## [0.7.0] (2026-11-09)
+
+### Added
+
+- Added investigation efficiency and timeout guidance to `QUALITY.md`.
+- Added trusted timer metadata and timeout evaluation coverage.
 
 ## [0.6.6] (2026-10-28)
 
