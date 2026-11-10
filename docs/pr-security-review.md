@@ -38,8 +38,10 @@ The capacity steps then write a fixed `NEEDS-HUMAN` report on exit 3.
 
 ## Event flow
 
-1. GitHub runs `ci.yml` for the pull request event.
-2. GitHub runs `security-review-pr.yml` after `ci` completes.
+1. GitHub runs `immutable-conflict-check.yml` for the pull request target
+   event. The runner scans every pull request tree with the vendored
+   compliance checker.
+2. GitHub runs `security-review-pr.yml` after the compliance run completes.
 3. `resolve-pr` resolves one pull request from the workflow run head SHA.
 4. `resolve-pr` skips a head that already carries a genuine `security-review`
    check run with a verdict. The dedupe section defines genuine.
@@ -88,16 +90,20 @@ an override. Manual settings step 6 closes the override.
 The `review` job stops after 30 minutes. The job makes at most two model calls.
 The foucault adapter bounds each call at 600 seconds.
 
-Runs for one head SHA share a concurrency group. A second run waits for the
-first run instead of cancelling it. The dedupe then skips the second review.
+Runs for one head SHA share a concurrency group. A newer run for the same
+head cancels an obsolete run. The trusted verdict record skips the newer
+review when the first run already finished.
 
 ## Differences from upstream
 
 - Every foucault script path carries the `.foucault/` prefix. Upstream
   adopters copy the adapter scripts into their own checkout.
-- The workflow gates fork review on the `safe-to-review` label and the
-  `fork-review` environment. Upstream also requires its Immutable Compliance
-  runner before a fork review.
+- The workflow gates fork review on the `safe-to-review` label, the
+  compliance runner, and the `fork-review` environment. The compliance
+  runner binds the checker's own trusted step schema, which carries
+  upstream's checkout and setup-python pins instead of euler's.
+- The vendored checker modules under `scripts/` carry euler's compliance
+  configuration. The branch-prefix list accepts euler's `ci/` prefix.
 - The caller keeps read-only permissions at workflow level and per-job
   permission declarations. Upstream grants write permissions at workflow
   level.
@@ -106,14 +112,27 @@ first run instead of cancelling it. The dedupe then skips the second review.
 
 ## Fork review
 
-`same_repository == false` plus the `safe-to-review` label makes resolve-pr
-mark the head as approved. The pull request author or a maintainer applies
-the label before requesting review; the workflow only reads it. The
-`fork-review` caller selects the reusable workflow's `fork-review` job,
-which attaches the `fork-review` environment. GitHub waits for environment
-approval and exposes environment secrets before the model call. The caller
-maps `OLLAMA_API_KEY` to `MODEL_API_KEY`, and an environment secret with the
-same name takes precedence inside the protected job.
+`same_repository == false` plus the `safe-to-review` label plus a successful
+compliance run on the same head makes resolve-pr mark the head as approved.
+The pull request author or a maintainer applies the label before requesting
+review; the workflow only reads it. The `fork-review` caller selects the
+reusable workflow's `fork-review` job, which attaches the `fork-review`
+environment. GitHub waits for environment approval and exposes environment
+secrets before the model call. The caller maps `OLLAMA_API_KEY` to
+`MODEL_API_KEY`, and an environment secret with the same name takes
+precedence inside the protected job.
+
+## Compliance
+
+`immutable-conflict-check.yml` runs on `pull_request_target`. The runner
+keeps the exact trusted schema the vendored `check_compliance_tree.py`
+validates in every pull request tree, so a pull request cannot weaken the
+runner. The checker modules under `scripts/` and the hash-pinned
+`requirements-checkers.txt` come from the same foucault commit as the review
+pin. The scan reads pull request objects as data and never executes pull
+request code. A failed scan leaves the head non-compliant and keeps the fork
+review skipped. Same-repository reviews run the security review after the
+compliance run completes on the same head.
 
 ## Trust boundary
 
@@ -121,7 +140,8 @@ same name takes precedence inside the protected job.
 reviewer. The workflow never executes pull request content. Every checkout
 sets `persist-credentials: false`. The model step receives only the
 `OLLAMA_API_KEY` secret as `MODEL_API_KEY`. An invalid model response goes to
-an artifact. The log never echoes model text.
+an artifact. The log never echoes model text. The compliance runner executes
+default-branch code and scans pull request object trees as data only.
 
 ## Secret
 
@@ -144,12 +164,14 @@ provider spending cap.
 These steps change repository and provider settings. A repository admin
 performs them:
 
-1. Create a GitHub environment for the model key. Limit its deployment
+1. Create the `safe-to-review` label for fork requests that may consume the
+   protected model capacity. The workflows only read the label.
+2. Create a GitHub environment named `fork-review`. Limit its deployment
    branches to the default branch.
-2. Add the key as an environment secret.
-3. Add `environment:` to both review jobs in the same change as the secret
-   move.
-4. Delete the `OLLAMA_API_KEY` repository secret.
+3. Add the key as a `fork-review` environment secret.
+4. Delete the `OLLAMA_API_KEY` repository secret after both review paths see
+   it in place, or keep a mapped repository secret for the same-repository
+   review.
 5. Set a spending cap with the provider.
 6. Add a ruleset that requires human review for changes under
    `.github/workflows/`. This step closes the override. A pull request that
@@ -163,9 +185,11 @@ performs them:
 ## Upgrade
 
 1. Pick a new foucault release commit.
-2. Diff foucault's `security-review-pr.yml` and `security-review.yml` between
-   the old and new pins.
-3. Port each upstream change into `security-review-pr.yml`. Keep the
-   `.foucault/` paths.
+2. Diff foucault's `security-review.yml`, `immutable-conflict-check.yml`, and
+   the adapter scripts between the old and new pins.
+3. Port each upstream change. The review steps live in
+   `security-review.yml`; keep the `.foucault/` path prefix. Refresh the
+   vendored checker modules and `requirements-checkers.txt` from the new pin
+   in the same change.
 4. Set `FOUCAULT_REF` and the version comment.
-5. Update this document and `adopters/README.md`.
+5. Update this document and the contract tests.

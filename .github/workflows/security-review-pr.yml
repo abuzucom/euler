@@ -16,7 +16,7 @@ name: security-review-pr
 
 "on":
   workflow_run:
-    workflows: [ci]
+    workflows: [immutable-conflict-check]
     types: [completed]
 
 # A newer run for the same head cancels an obsolete paid review about to
@@ -47,6 +47,7 @@ jobs:
       same_repository: ${{ steps.resolve.outputs.same_repository }}
       already_reviewed: ${{ steps.resolve.outputs.already_reviewed }}
       fork_review_approved: ${{ steps.resolve.outputs.fork_review_approved }}
+      compliance_passed: ${{ steps.resolve.outputs.compliance_passed }}
       pr_number: ${{ steps.resolve.outputs.pr_number }}
       base_sha: ${{ steps.resolve.outputs.base_sha }}
       head_sha: ${{ steps.resolve.outputs.head_sha }}
@@ -117,6 +118,9 @@ jobs:
               core.setFailed("pull request changed while resolving review metadata");
               return;
             }
+            const compliancePassed = workflowRun?.name === "immutable-conflict-check" &&
+              workflowRun?.head_sha?.toLowerCase() === headSha.toLowerCase() &&
+              workflowRun?.conclusion === "success";
             const forkReviewApproved = !sameRepository &&
               (pullRequest.labels || []).some((label) =>
                 label.name === "safe-to-review"
@@ -197,6 +201,10 @@ jobs:
               forkReviewApproved ? "true" : "false",
             );
             core.setOutput(
+              "compliance_passed",
+              compliancePassed ? "true" : "false",
+            );
+            core.setOutput(
               "same_repository",
               sameRepository ? "true" : "false",
             );
@@ -232,6 +240,7 @@ jobs:
       needs.resolve-pr.result == 'success'
       && needs.resolve-pr.outputs.same_repository == 'false'
       && needs.resolve-pr.outputs.fork_review_approved == 'true'
+      && needs.resolve-pr.outputs.compliance_passed == 'true'
       && needs.resolve-pr.outputs.already_reviewed != 'true'
     uses: ./.github/workflows/security-review.yml
     with:
@@ -253,11 +262,13 @@ jobs:
     if: >-
       needs.resolve-pr.result == 'success'
       && needs.resolve-pr.outputs.same_repository == 'false'
-      && needs.resolve-pr.outputs.fork_review_approved != 'true'
+      && (needs.resolve-pr.outputs.fork_review_approved != 'true'
+      || needs.resolve-pr.outputs.compliance_passed != 'true')
     runs-on: ubuntu-latest
     permissions: {}
     steps:
       - name: Explain skipped review
         run: >-
           echo "Fork review is waiting for the safe-to-review label on the
-          pull request and manual approval in the fork-review environment."
+          pull request, a successful immutable-conflict-check run, and manual
+          approval in the fork-review environment."

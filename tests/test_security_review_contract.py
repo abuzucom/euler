@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import importlib.util
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CALLER_PATH = ROOT / ".github" / "workflows" / "security-review-pr.yml"
 REUSABLE_PATH = ROOT / ".github" / "workflows" / "security-review.yml"
+COMPLIANCE_PATH = ROOT / ".github" / "workflows" / "immutable-conflict-check.yml"
 
 
 def extract_step(workflow: str, name: str) -> str:
@@ -79,9 +81,87 @@ class SecurityReviewCallerTests(unittest.TestCase):
         self.assertIn('"pull request changed while resolving review metadata"', self.caller)
         self.assertIn("github.rest.pulls.get", self.caller)
 
+    def test_review_runs_after_the_compliance_gate(self) -> None:
+        self.assertIn("workflows: [immutable-conflict-check]", self.caller)
+        self.assertIn('workflowRun?.name === "immutable-conflict-check"', self.caller)
+        self.assertIn(
+            "compliance_passed: ${{ steps.resolve.outputs.compliance_passed }}",
+            self.caller,
+        )
+        fork = extract_job(self.caller, "fork-review")
+        self.assertIn("needs.resolve-pr.outputs.compliance_passed == 'true'", fork)
+        skipped = extract_job(self.caller, "fork-review-skipped")
+        self.assertIn(
+            "needs.resolve-pr.outputs.fork_review_approved != 'true'",
+            skipped,
+        )
+        self.assertIn(
+            "needs.resolve-pr.outputs.compliance_passed != 'true'",
+            skipped,
+        )
+
     def test_concurrency_cancels_an_obsolete_run(self) -> None:
         self.assertIn("cancel-in-progress: true", self.caller)
         self.assertNotIn("cancel-in-progress: false", self.caller)
+
+
+class ComplianceWorkflowTests(unittest.TestCase):
+    """Verify the compliance runner matches the checker's trusted schema."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.compliance = COMPLIANCE_PATH.read_text(encoding="utf-8")
+
+    def test_runner_gates_on_pull_request_target(self) -> None:
+        self.assertIn("pull_request_target:", self.compliance)
+        self.assertIn("branches: [main]", self.compliance)
+        self.assertIn("types: [opened, synchronize, reopened, ready_for_review", self.compliance)
+
+    def test_runner_keeps_read_only_permissions(self) -> None:
+        self.assertIn("permissions:\n  contents: read", self.compliance)
+        self.assertNotIn("secrets.", self.compliance)
+
+    def test_runner_binds_the_exact_trusted_environment(self) -> None:
+        self.assertIn(
+            "TRUSTED_CHECKER: trusted-base/scripts/check_compliance_tree.py",
+            self.compliance,
+        )
+        self.assertIn("PR_REPO: pr-head", self.compliance)
+        self.assertIn(
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES: ${{ github.workspace }}/trusted-base/.git/objects",
+            self.compliance,
+        )
+
+    def test_runner_runs_the_trusted_five_step_sequence(self) -> None:
+        base = extract_step(self.compliance, "Check out the exact trusted base")
+        head = extract_step(self.compliance, "Check out the exact pull request head")
+        for block in (base, head):
+            self.assertIn("actions/checkout@11d5960a326750d5838078e36cf38b85af677262", block)
+            self.assertIn("persist-credentials: false", block)
+            self.assertIn("fetch-depth: 201", block)
+        self.assertIn("trusted-base", base)
+        self.assertIn("pr-head", head)
+        install = extract_step(self.compliance, "Install trusted checker dependencies")
+        self.assertIn("--require-hashes", install)
+        self.assertIn("trusted-base/requirements-checkers.txt", install)
+        scan = extract_step(self.compliance, "Scan immutable pull request objects with the trusted checker")
+        self.assertIn('--repo "$PR_REPO" --tree "$PR_HEAD_SHA"', scan)
+        self.assertIn('--pr-author "$PR_AUTHOR"', scan)
+
+    def test_checker_modules_ship_with_the_runner(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "_compliance_contract", ROOT / "scripts" / "check_compliance_tree.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for name in module.CHECKER_NAMES:
+            self.assertTrue((ROOT / "scripts" / f"{name}.py").is_file())
+        self.assertTrue((ROOT / "scripts" / "trusted_git.py").is_file())
+
+    def test_checker_requirements_are_hash_pinned(self) -> None:
+        requirements = (ROOT / "requirements-checkers.txt").read_text(encoding="utf-8")
+        self.assertIn("==", requirements)
+        self.assertIn("--hash=sha256:", requirements)
 
 
 class SecurityReviewReusableTests(unittest.TestCase):
