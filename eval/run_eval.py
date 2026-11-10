@@ -86,9 +86,7 @@ def validate_expected(case: Case, known_classes: set[str]) -> list[str]:
     if not isinstance(expected["notes"], str) or not expected["notes"].strip():
         problems.append("notes must be a non-empty string")
     elapsed = expected.get("active_work_elapsed_seconds")
-    if elapsed is not None and (
-        isinstance(elapsed, bool) or not isinstance(elapsed, int) or elapsed < 0
-    ):
+    if elapsed is not None and (isinstance(elapsed, bool) or not isinstance(elapsed, int) or elapsed < 0):
         problems.append("active_work_elapsed_seconds must be a non-negative integer")
     review_status = expected.get("expected_review_status")
     if review_status is not None and review_status != "NEEDS-HUMAN":

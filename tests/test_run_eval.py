@@ -162,9 +162,7 @@ class LiveEvaluationTest(CaseFixture):
         )
         failures = run_eval.evaluate_response(case, response)
         self.assertTrue(any("missing expected review status" in item for item in failures))
-        response_with_status = (
-            "REVIEW STATUS: NEEDS-HUMAN - active review time limit reached.\n" + response
-        )
+        response_with_status = "REVIEW STATUS: NEEDS-HUMAN - active review time limit reached.\n" + response
         self.assertEqual(run_eval.evaluate_response(case, response_with_status), [])
 
 
