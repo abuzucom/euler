@@ -1,0 +1,7 @@
+diff --git a/app/labels.py b/app/labels.py
+new file mode 100644
+--- /dev/null
++++ b/app/labels.py
+@@ -0,0 +1,2 @@
++def label(name):
++    return name
