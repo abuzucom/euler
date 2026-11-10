@@ -163,6 +163,28 @@ class ComplianceWorkflowTests(unittest.TestCase):
         self.assertIn("==", requirements)
         self.assertIn("--hash=sha256:", requirements)
 
+    def test_runner_env_binds_scalar_strings_only(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "_compliance_env_schema",
+            ROOT / "scripts" / "check_compliance_tree.py",
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        expected_keys = {
+            "PR_BASE_REPOSITORY",
+            "PR_BASE_SHA",
+            "PR_HEAD_BRANCH",
+            "PR_HEAD_REPOSITORY",
+            "PR_HEAD_SHA",
+            "PR_AUTHOR",
+            "PR_REPO",
+            "TRUSTED_CHECKER",
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        }
+        self.assertEqual(set(module.TRUSTED_ENVIRONMENT), expected_keys)
+        for value in module.TRUSTED_ENVIRONMENT.values():
+            self.assertIsInstance(value, str)
+
 
 class SecurityReviewReusableTests(unittest.TestCase):
     """Verify the reusable review implementation and its trust boundaries."""
