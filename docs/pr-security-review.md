@@ -17,11 +17,13 @@ mismatch with the pin.
 
 ## Wiring
 
-Foucault's reusable workflow runs its adapter from fixed paths in the caller
-checkout. Euler's own quality adapter occupies `ci/build_pr_case.py` and
-`ci/call_model.py`. The local workflow mirrors foucault's caller and reusable
-job steps instead. Every foucault script runs from the pinned `.foucault/`
-checkout:
+The reusable `security-review.yml` carries the review steps. The caller
+resolves metadata, gates executions, and maps the provider secret. Both
+execution paths call the reusable file in this repository. Foucault's
+reusable workflow runs its adapter from fixed paths in the caller checkout.
+Euler's own quality adapter occupies `ci/build_pr_case.py` and
+`ci/call_model.py`. Euler's reusable copy keeps every foucault script inside
+the pinned `.foucault/` checkout instead:
 
 - `.foucault/ci/build_pr_case.py` writes `case_text.txt`.
 - `.foucault/ci/run_model_command.py` runs `ci/call_model.py` resolved inside
@@ -41,8 +43,9 @@ The capacity steps then write a fixed `NEEDS-HUMAN` report on exit 3.
 3. `resolve-pr` resolves one pull request from the workflow run head SHA.
 4. `resolve-pr` skips a head that already carries a genuine `security-review`
    check run with a verdict. The dedupe section defines genuine.
-5. A same-repository pull request runs `review`. A fork pull request runs
-   `fork-review-skipped` without a secret.
+5. A same-repository pull request runs the `review` job. A fork pull request
+   with the `safe-to-review` label runs `fork-review` behind the environment.
+   Any other fork pull request runs `fork-review-skipped`.
 6. `review` checks out the base revision and the pinned foucault revision.
 7. `review` fetches the head object without a checkout.
 8. `review` builds the case. An oversized diff writes a fixed capacity report
@@ -90,11 +93,27 @@ first run instead of cancelling it. The dedupe then skips the second review.
 
 ## Differences from upstream
 
-- Every foucault script path carries the `.foucault/` prefix.
-- Each job declares its own permissions. Upstream grants `checks: write` and
-  `pull-requests: write` at workflow level.
+- Every foucault script path carries the `.foucault/` prefix. Upstream
+  adopters copy the adapter scripts into their own checkout.
+- The workflow gates fork review on the `safe-to-review` label and the
+  `fork-review` environment. Upstream also requires its Immutable Compliance
+  runner before a fork review.
+- The caller keeps read-only permissions at workflow level and per-job
+  permission declarations. Upstream grants write permissions at workflow
+  level.
 - The file follows the repository yamllint rules. It quotes the `on` key and
-  wraps the long `review` condition.
+  wraps long expressions.
+
+## Fork review
+
+`same_repository == false` plus the `safe-to-review` label makes resolve-pr
+mark the head as approved. The pull request author or a maintainer applies
+the label before requesting review; the workflow only reads it. The
+`fork-review` caller selects the reusable workflow's `fork-review` job,
+which attaches the `fork-review` environment. GitHub waits for environment
+approval and exposes environment secrets before the model call. The caller
+maps `OLLAMA_API_KEY` to `MODEL_API_KEY`, and an environment secret with the
+same name takes precedence inside the protected job.
 
 ## Trust boundary
 
@@ -107,8 +126,9 @@ an artifact. The log never echoes model text.
 ## Secret
 
 The active foucault provider profile is Ollama with `kimi-k2.7-code`. Set the
-`OLLAMA_API_KEY` repository secret. Without it, every review fails before a
-verdict.
+`OLLAMA_API_KEY` repository secret for the same-repository review. Without
+it, every review fails before a verdict. The protected fork path reads the
+`fork-review` environment secret.
 
 ### Residual risk
 

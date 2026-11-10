@@ -12,6 +12,9 @@ loading `QUALITY.md` into a deployment.
 
 - Updated the foucault integration pin to v3.7.1 and ported the upstream
   capacity handling, verdict-record dedupe, and pin verification.
+- Ported the upstream fork review. A fork pull request runs the protected
+  `fork-review` path after its author or a maintainer applies the
+  `safe-to-review` label and an admin approves the environment gate.
 
 ## [0.7.1] (2026-11-09)
 
