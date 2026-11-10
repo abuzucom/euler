@@ -45,12 +45,9 @@ EVALUATION_FIXTURE_PREFIX = "eval/cases/"
 # hashed command, so a pull request cannot downgrade to an unverified
 # install.
 TRUSTED_REQUIREMENTS_COMMAND = (
-    "python -m pip install --require-hashes "
-    "--requirement trusted-base/requirements-checkers.txt"
+    "python -m pip install --require-hashes --requirement trusted-base/requirements-checkers.txt"
 )
-TRUSTED_REQUIREMENTS_COMMANDS = (
-    TRUSTED_REQUIREMENTS_COMMAND,
-)
+TRUSTED_REQUIREMENTS_COMMANDS = (TRUSTED_REQUIREMENTS_COMMAND,)
 TRUSTED_SCAN_COMMAND = (
     'python "$TRUSTED_CHECKER" --repo "$PR_REPO" --tree "$PR_HEAD_SHA" '
     '--base "$PR_BASE_SHA" --branch "$PR_HEAD_BRANCH" '
