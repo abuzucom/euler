@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.8.0] (2026-11-09)
+
+### Added
+
+- Updated the foucault integration pin to v3.7.1 and ported the upstream
+  capacity handling, verdict-record dedupe, and pin verification.
+
 ## [0.7.1] (2026-11-09)
 
 ### Changed

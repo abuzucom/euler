@@ -9,10 +9,11 @@ The two reviews publish separate check runs.
 
 ## Pin
 
-The workflow pins foucault v3.3.14 at commit
-`06d74fba4d9013654cdaf9896bb7535724385186`. The `FOUCAULT_REF` job variable
+The workflow pins foucault v3.7.1 at commit
+`ae8a60036681ce8e865eee256fc685585c3f290d`. The `FOUCAULT_REF` job variable
 holds the pin. The workflow loads `AUDIT.md` and the foucault adapter from that
-one commit.
+one commit. A verify step re-reads the checked-out revision and rejects a
+mismatch with the pin.
 
 ## Wiring
 
@@ -28,6 +29,11 @@ checkout:
 - `.foucault/ci/call_model.py` reads `.foucault/ci/model_providers.json`.
 - `.foucault/scripts/check_pr_review_response.py` validates the report.
 
+The case builder diffs from the merge base. It needs the `AUDIT_PROMPT_FILE`
+environment variable and exits 3 when the diff exceeds review capacity. The
+model adapter exits 3 when the input exceeds every configured model budget.
+The capacity steps then write a fixed `NEEDS-HUMAN` report on exit 3.
+
 ## Event flow
 
 1. GitHub runs `ci.yml` for the pull request event.
@@ -39,29 +45,31 @@ checkout:
    `fork-review-skipped` without a secret.
 6. `review` checks out the base revision and the pinned foucault revision.
 7. `review` fetches the head object without a checkout.
-8. `review` builds the case, calls the model, validates the report, and retries
-   once on a structural failure.
-9. `review` uploads a `security-review-head-<head sha>` marker artifact.
-10. `review` posts a fenced PR comment and fails on BLOCK or NEEDS-HUMAN.
-11. `review` publishes a `security-review` check run on the head SHA.
+8. `review` builds the case. An oversized diff writes a fixed capacity report
+   with a `NEEDS-HUMAN` verdict instead of a model call.
+9. `review` calls the model. An input above every model budget writes the same
+   capacity report. A structural failure retries once.
+10. `review` writes and uploads a `security-review-verdict-<head sha>` verdict
+    record artifact.
+11. `review` posts a fenced PR comment and fails on BLOCK or NEEDS-HUMAN.
+12. `review` publishes a `security-review` check run on the head SHA.
 
 ## Dedupe
 
-Any workflow with `checks: write` can create a check run named
-`security-review`. A same-repository pull request can add such a workflow.
-`resolve-pr` counts a check run as a completed review only when all of these
-conditions hold:
+Check run names and summaries are writable by any workflow holding
+`checks: write`. A check run alone cannot prove a review. `resolve-pr` uses a
+check run with a verdict token as a prefilter. It then trusts a completed
+review only when every condition holds:
 
-- The summary carries a `VERDICT:` token.
-- The summary names a run in this repository on a `Workflow run:` line.
-  GitHub replaces the `details_url` of a check run created with the job
-  token.
-- That run comes from `.github/workflows/security-review-pr.yml` on the
-  default branch through the `workflow_run` event.
-- That run holds the marker artifact for the current head SHA.
+- The run holds a verdict record artifact named
+  `security-review-verdict-<head sha>`.
+- The artifact belongs to a run of `.github/workflows/security-review-pr.yml`.
+- That run uses the `workflow_run` event and the default branch of this
+  repository. GitHub runs `workflow_run` workflows from the default branch
+  alone, so a pull request branch cannot produce one.
 
-A failed lookup counts as no review. The marker artifact expires after 30
-days. A later `ci` run on an older head then triggers a fresh review.
+A failed lookup counts as no review. An expired artifact counts as no
+review. A later run on the same head then triggers a fresh review.
 
 ### Override
 

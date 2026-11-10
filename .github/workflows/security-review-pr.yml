@@ -18,12 +18,12 @@ name: security-review-pr
     workflows: [ci]
     types: [completed]
 
-# A second ci run for the same head waits here instead of cancelling a paid
-# review in progress. When it starts, the first run's check run and marker
-# artifact exist, so the resolve-pr dedupe skips the model call.
+# A newer run for the same head cancels an obsolete paid review about to
+# start. The verdict-record dedupe skips a head that already carries a
+# trusted review record, so a cancelled run loses at most the setup time.
 concurrency:
   group: security-review-${{ github.event.workflow_run.head_sha }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 # Each job declares only the permissions it uses. Upstream foucault grants
 # these permissions at workflow level.
@@ -88,9 +88,57 @@ jobs:
               return;
             }
 
-            // One model call per head revision. A completed check run carrying
-            // a verdict means this head was already reviewed. A failed run
-            // carries no verdict, so a flaky review still retries.
+            // One model call per head revision. A check run name and summary
+            // are writable by any workflow token holding checks: write,
+            // including one in a workflow a pull request branch adds. The
+            // check run is therefore only a prefilter. The proof is the
+            // verdict artifact, accepted only from a workflow_run of this
+            // workflow file on the default branch. GitHub runs workflow_run
+            // workflows from the default branch alone, so a pull request
+            // branch cannot produce one. A failed run uploads no record, so
+            // a flaky review still retries.
+            const getRun = async (runId) => {
+              const { data } = await github.rest.actions.getWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: runId,
+              });
+              return data;
+            };
+            const hasTrustedVerdictRecord = async (sha) => {
+              const name = `security-review-verdict-${sha}`;
+              const artifacts = await github.paginate(
+                github.rest.actions.listArtifactsForRepo,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name,
+                  per_page: 100,
+                },
+              );
+              const records = artifacts.filter((artifact) =>
+                artifact.name === name &&
+                !artifact.expired &&
+                artifact.workflow_run?.id
+              );
+              if (records.length === 0) {
+                return false;
+              }
+              const trustedPath = (await getRun(context.runId)).path;
+              const defaultBranch = context.payload.repository?.default_branch;
+              for (const record of records) {
+                const producer = await getRun(record.workflow_run.id);
+                if (
+                  producer.event === "workflow_run" &&
+                  producer.path === trustedPath &&
+                  Boolean(defaultBranch) &&
+                  producer.head_branch === defaultBranch
+                ) {
+                  return true;
+                }
+              }
+              return false;
+            };
             const checkRuns = await github.paginate(
               github.rest.checks.listForRef,
               {
@@ -101,66 +149,14 @@ jobs:
                 per_page: 100,
               },
             );
-            // A pull request can add its own workflow that creates a check run
-            // with this name and a fake verdict. Count a check run only when
-            // its summary names a run of this workflow file on the default
-            // branch, and that run holds the marker artifact for this head. A
-            // run URL copied from a review of another head has no such
-            // artifact. A failed lookup counts as not reviewed. GitHub replaces
-            // the details_url of a check run created with the job token, so
-            // the summary carries the run URL.
-            const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            // The publish step builds the run URL from github.server_url, so
-            // the pattern uses the same host on GitHub Enterprise Server.
-            const serverUrl = (context.serverUrl || "https://github.com").replace(/\/+$/, "");
-            const runUrlPattern = new RegExp(
-              `^Workflow run: ${escapeRegExp(serverUrl)}/${escapeRegExp(baseRepository)}/actions/runs/(\\d+)$`,
-              "im",
+            const hasVerdictCheck = checkRuns.some((run) =>
+              run.status === "completed" &&
+              /VERDICT: (APPROVE|BLOCK|NEEDS-HUMAN)\b/.test(
+                run.output?.summary || ""
+              )
             );
-            const isGenuineReview = async (checkRun) => {
-              if (
-                checkRun.status !== "completed" ||
-                !/VERDICT: (APPROVE|BLOCK|NEEDS-HUMAN)\b/.test(checkRun.output?.summary || "")
-              ) {
-                return false;
-              }
-              const match = runUrlPattern.exec(checkRun.output?.summary || "");
-              if (!match) {
-                return false;
-              }
-              const runId = Number(match[1]);
-              try {
-                const { data: run } = await github.rest.actions.getWorkflowRun({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  run_id: runId,
-                });
-                const genuineRun = run.path === ".github/workflows/security-review-pr.yml" &&
-                  run.event === "workflow_run" &&
-                  run.head_branch === context.payload.repository?.default_branch &&
-                  run.repository?.full_name?.toLowerCase() === baseRepository.toLowerCase();
-                if (!genuineRun) {
-                  return false;
-                }
-                const { data: artifacts } = await github.rest.actions.listWorkflowRunArtifacts({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  run_id: runId,
-                  name: `security-review-head-${headSha}`,
-                });
-                return artifacts.total_count > 0;
-              } catch (error) {
-                core.warning(`check run provenance lookup failed: ${error.message}`);
-                return false;
-              }
-            };
-            let alreadyReviewed = false;
-            for (const checkRun of checkRuns) {
-              if (await isGenuineReview(checkRun)) {
-                alreadyReviewed = true;
-                break;
-              }
-            }
+            const alreadyReviewed = hasVerdictCheck &&
+              await hasTrustedVerdictRecord(headSha);
             core.setOutput("already_reviewed", alreadyReviewed ? "true" : "false");
             core.setOutput(
               "same_repository",
@@ -188,8 +184,8 @@ jobs:
       contents: read
       pull-requests: write
     env:
-      # Foucault v3.3.14.
-      FOUCAULT_REF: "06d74fba4d9013654cdaf9896bb7535724385186"
+      # Foucault v3.7.1.
+      FOUCAULT_REF: "ae8a60036681ce8e865eee256fc685585c3f290d"
     steps:
       - name: Resolve pull request metadata
         id: resolve
@@ -310,6 +306,35 @@ jobs:
           path: .foucault
           persist-credentials: false
 
+      - name: Verify AUDIT.md revision
+        env:
+          EXPECTED_AUDIT_REF: ${{ env.FOUCAULT_REF }}
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git -C .foucault rev-parse HEAD)"
+          if [ "$checked_out_sha" != "$EXPECTED_AUDIT_REF" ]; then
+            echo "error: checked out policy SHA $checked_out_sha does not match expected $EXPECTED_AUDIT_REF" >&2
+            exit 1
+          fi
+
+      - name: Verify pinned review scripts
+        run: |
+          set -euo pipefail
+          # Later steps run these scripts from the pinned .foucault checkout.
+          # Name each absent one here instead of failing later with a less
+          # specific error.
+          missing=0
+          for script in \
+            .foucault/ci/build_pr_case.py \
+            .foucault/ci/run_model_command.py \
+            .foucault/scripts/check_pr_review_response.py; do
+            if [ ! -f "$script" ]; then
+              echo "error: $script is missing from the pinned .foucault checkout" >&2
+              missing=1
+            fi
+          done
+          exit "$missing"
+
       - name: Fetch pull request head object
         env:
           PR_HEAD_REPO_URL: ${{ steps.resolve.outputs.head_repo_url }}
@@ -342,13 +367,17 @@ jobs:
               if head_repository.casefold() == base_repository.casefold()
               else repository_url
           )
+          # Full history lets the case builder diff from the merge base. The
+          # base checkout already holds every base commit, so only commits
+          # missing from it transfer.
           subprocess.run(
-              ["git", "fetch", "--no-tags", "--depth=1", fetch_source, head_sha],
+              ["git", "fetch", "--no-tags", fetch_source, head_sha],
               check=True,
           )
           PY
 
       - name: Build provenance-labeled case text
+        id: case
         env:
           EVENT_PATH: ${{ github.event_path }}
           BASE_SHA: ${{ steps.resolve.outputs.base_sha }}
@@ -356,10 +385,22 @@ jobs:
           PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
           PR_REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
-        run: python3 .foucault/ci/build_pr_case.py
+          AUDIT_PROMPT_FILE: .foucault/AUDIT.md
+        run: |
+          set -euo pipefail
+          # Exit code 3 means the diff exceeds review capacity. The capacity
+          # report step then records NEEDS-HUMAN instead of no verdict.
+          status=0
+          python3 .foucault/ci/build_pr_case.py || status=$?
+          if [ "$status" -eq 3 ]; then
+            echo "oversized=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          exit "$status"
 
       - name: Run model call
         id: model
+        if: ${{ steps.case.outputs.oversized != 'true' }}
         env:
           AUDIT_PROMPT_FILE: .foucault/AUDIT.md
           CASE_TEXT_FILE: case_text.txt
@@ -368,11 +409,38 @@ jobs:
           MODEL_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: |
           set -euo pipefail
-          python3 .foucault/ci/run_model_command.py "$MODEL_CALL_COMMAND" > response.txt
+          # Exit code 3 means the input exceeds every configured model
+          # budget. The capacity report step then records NEEDS-HUMAN.
+          status=0
+          python3 .foucault/ci/run_model_command.py "$MODEL_CALL_COMMAND" > response.txt || status=$?
+          if [ "$status" -eq 3 ]; then
+            echo "oversized=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
           if ! python3 .foucault/scripts/check_pr_review_response.py response.txt > /dev/null; then
             echo "first response failed validation; one retry" >&2
             python3 .foucault/ci/run_model_command.py "$MODEL_CALL_COMMAND" > response.txt
           fi
+
+      # Fixed text only. The report quotes nothing from the pull request. An
+      # author cannot shape the verdict this step records.
+      - name: Write capacity review report
+        if: ${{ steps.case.outputs.oversized == 'true' || steps.model.outputs.oversized == 'true' }}
+        run: |
+          set -euo pipefail
+          cat > response.txt <<'REPORT'
+          Security review: not performed
+
+          The pull request diff exceeds the input budget of every configured
+          review model. The automated review covered no files. A human
+          reviewer must assess the complete diff before merge.
+
+          VERDICT: NEEDS-HUMAN - diff exceeds automated review capacity
+          VERDICT_JSON: {"mode": "PR", "verdict": "NEEDS-HUMAN", "findings": []}
+          REPORT
 
       - name: Validate report structure
         id: validate
@@ -435,9 +503,9 @@ jobs:
           # open on an unrecognized token, because 'VERDICT: REJECT' matches
           # neither alternative and would merge.
           rest="${line#VERDICT:}"
-          # read takes the first word without glob expansion of model text.
-          verdict_token=""
-          read -r verdict_token _ <<<"$rest" || true
+          # read splits on whitespace without pathname expansion, so a
+          # token such as * stays literal and fails as unrecognized.
+          read -r verdict_token _ <<< "$rest"
           case "$verdict_token" in
             APPROVE)
               echo "blocked=false" >> "$GITHUB_OUTPUT"
@@ -463,21 +531,24 @@ jobs:
               ;;
           esac
 
-      # The dedupe in resolve-pr trusts a security-review check run only when
-      # the run it names holds this artifact. The name binds the run to the
-      # head it reviewed.
-      - name: Write review marker
+      # The caller skips a head that already has a review record. A check
+      # run name and summary are writable by any workflow token holding
+      # checks: write, including one in a workflow a pull request branch
+      # adds. An artifact belongs to the run that uploaded it, so the caller
+      # trusts only this record and verifies the run that produced it.
+      - name: Write verdict record
+        if: ${{ always() && steps.verdict.outputs.line != '' }}
         env:
-          HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
-        run: printf '%s\n' "$HEAD_SHA" > review-head.txt
+          VERDICT_LINE: ${{ steps.verdict.outputs.line }}
+        run: printf '%s\n' "$VERDICT_LINE" > verdict.txt
 
-      - name: Upload review marker
+      - name: Upload verdict record
+        if: ${{ always() && steps.verdict.outputs.line != '' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
-          name: security-review-head-${{ steps.resolve.outputs.head_sha }}
-          path: review-head.txt
+          name: security-review-verdict-${{ steps.resolve.outputs.head_sha }}
+          path: verdict.txt
           if-no-files-found: error
-          retention-days: 30
 
       - name: Post PR comment
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
