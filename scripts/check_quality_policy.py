@@ -31,9 +31,7 @@ REQUIRED_TEXT = (
 )
 LONG_LINE_PREFIXES = ("|", "VERDICT_JSON:")
 CLASS_HEADING = re.compile(r"^### ([QMCD]\d+) ")
-TIERED_HEADING = re.compile(
-    r"^### (?P<id>[QMCD]\d+) (?P<name>[^()]+) \((?P<tier>[A-Za-z]+)(?P<script> \+script)?\)$"
-)
+TIERED_HEADING = re.compile(r"^### (?P<id>[QMCD]\d+) (?P<name>[^()]+) \((?P<tier>[A-Za-z]+)(?P<script> \+script)?\)$")
 HEADING = re.compile(r"^#{2,3} .+$", re.MULTILINE)
 CODE_SPAN = re.compile(r"`[^`]*`")
 BULLET_PREFIX = "- "

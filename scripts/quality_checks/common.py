@@ -3,19 +3,54 @@
 from __future__ import annotations
 
 import ast
+import json
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+# Deeply nested input exhausts the parsers with PARSER_LIMIT_ERRORS instead of a syntax error.
+from .parser_limits import PARSER_LIMIT_ERRORS
+
 PYTHON_SUFFIXES = frozenset({".py"})
+PARSER_LIMITS_SCRIPT = Path(__file__).resolve().parent / "parser_limits.py"
+# Parsing a few hundred changed files takes seconds. The bound stops a hung child.
+PARSER_CHILD_TIMEOUT_SECONDS = 120
 JS_SUFFIXES = frozenset({".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"})
-SOURCE_SUFFIXES = PYTHON_SUFFIXES | JS_SUFFIXES | frozenset(
-    {".go", ".rs", ".java", ".kt", ".rb", ".php", ".cs", ".c", ".cc", ".cpp", ".h", ".hpp", ".swift", ".scala", ".sh"}
+SOURCE_SUFFIXES = (
+    PYTHON_SUFFIXES
+    | JS_SUFFIXES
+    | frozenset({
+        ".go",
+        ".rs",
+        ".java",
+        ".kt",
+        ".rb",
+        ".php",
+        ".cs",
+        ".c",
+        ".cc",
+        ".cpp",
+        ".h",
+        ".hpp",
+        ".swift",
+        ".scala",
+        ".sh",
+    })
 )
 CONFIG_SUFFIXES = frozenset({".yml", ".yaml", ".toml", ".cfg", ".ini"})
-SKIPPED_DIRECTORIES = frozenset(
-    {".git", "node_modules", ".venv", "venv", "__pycache__", "vendor", "dist", "build", ".tox", ".mypy_cache"}
-)
+SKIPPED_DIRECTORIES = frozenset({
+    ".git",
+    "node_modules",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "vendor",
+    "dist",
+    "build",
+    ".tox",
+    ".mypy_cache",
+})
 TEST_DIRECTORIES = frozenset({"tests", "test", "__tests__", "spec"})
 
 
@@ -54,13 +89,52 @@ def read_text(path: Path) -> str | None:
         return None
 
 
-def parse_python(path: Path, text: str) -> ast.Module | None:
-    """Return the parsed module, or None with a warning on a syntax error."""
+def parse_python_status(path: Path, text: str) -> tuple[ast.Module | None, bool]:
+    """Return the parsed module or None, and True when the parser hit a recursion or memory limit."""
     try:
-        return ast.parse(text, filename=str(path))
+        return ast.parse(text, filename=str(path)), False
     except SyntaxError as error:
         sys.stderr.write(f"warning: skipped {path}: {error}. Fix the syntax error to check the file.\n")
-        return None
+        return None, False
+    except PARSER_LIMIT_ERRORS as error:
+        # The PR builder screens changed files in a child process first. This catch covers the rest.
+        sys.stderr.write(f"warning: skipped {path}: {type(error).__name__}. Reduce the nesting to check the file.\n")
+        return None, True
+
+
+def parse_python(path: Path, text: str) -> ast.Module | None:
+    """Return the parsed module, or None with a warning on a syntax error or a parser limit."""
+    return parse_python_status(path, text)[0]
+
+
+def find_parser_limit_files(paths: list[Path]) -> list[Path]:
+    """Return the paths whose Python or TOML parse hits a parser limit, tested in a child process.
+
+    A failed child run returns every path, so a crash or timeout lists files as unchecked rather than clean.
+    """
+    if not paths:
+        return []
+    command = [sys.executable, "-I", str(PARSER_LIMITS_SCRIPT)]
+    request = json.dumps([str(path) for path in paths])
+    try:
+        result = subprocess.run(
+            command, input=request, capture_output=True, text=True, timeout=PARSER_CHILD_TIMEOUT_SECONDS, check=False
+        )
+        failing = set(json.loads(result.stdout)) if result.returncode == 0 else None
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError) as error:
+        sys.stderr.write(f"warning: parser limit check failed: {error}. Listing every screened file as unchecked.\n")
+        return list(paths)
+    if failing is None:
+        sys.stderr.write(
+            f"warning: parser limit check exited {result.returncode}. Listing every screened file as unchecked.\n"
+        )
+        return list(paths)
+    return [path for path in paths if str(path) in failing]
+
+
+def exceeds_parser_limits(path: Path) -> bool:
+    """Return True when the Python or TOML parser runs out of recursion depth or memory on the file."""
+    return bool(find_parser_limit_files([path]))
 
 
 def line_of_offset(text: str, offset: int) -> int:

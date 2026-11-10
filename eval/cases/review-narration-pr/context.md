@@ -1,0 +1,1 @@
+Add a small greeting function that returns a deterministic string.

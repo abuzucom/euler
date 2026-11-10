@@ -1,0 +1,8 @@
+{
+  "mode": "PR",
+  "expected_verdict": "APPROVE",
+  "expected_classes": [],
+  "expect_json": true,
+  "forbid_process_narration": true,
+  "notes": "A clean review should return conclusions without progress narration."
+}

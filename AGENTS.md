@@ -82,6 +82,8 @@ following checks exist:
 - `.github/workflows/ci.yml` runs `make lint` on every pull request. ruff and
   mypy cover `scripts/`, `ci/`, and `eval/run_eval.py`. ruff also covers
   `tests/`. yamllint covers `.github/`.
+- The ruff block tier runs with `--ignore-noqa`. Suppression comments have no
+  effect on it.
 - `make check` runs `scripts/check_quality_policy.py` on `QUALITY.md` and on
   this file for ASCII, LF line endings, and prose dashes.
 - `scripts/check_code_quality.py empty-catch` backs the catch block rule.

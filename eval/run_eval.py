@@ -93,6 +93,9 @@ def validate_expected(case: Case, known_classes: set[str]) -> list[str]:
     review_status = expected.get("expected_review_status")
     if review_status is not None and review_status != "NEEDS-HUMAN":
         problems.append("expected_review_status must be NEEDS-HUMAN")
+    narration_required = expected.get("forbid_process_narration")
+    if "forbid_process_narration" in expected and not isinstance(narration_required, bool):
+        problems.append("forbid_process_narration must be a boolean")
     return problems
 
 
@@ -153,6 +156,8 @@ def evaluate_response(case: Case, response: str) -> list[str]:
     expected = case.expected
     failures = []
     final_line = f"{report.label}: {report.value}" if report.label else ""
+    if expected.get("forbid_process_narration") and review_report.contains_process_narration(response):
+        failures.append("report contains process narration")
     if expected["expected_verdict"] not in final_line:
         failures.append(f"expected verdict '{expected['expected_verdict']}' in final line '{final_line}'")
     expected_status = expected.get("expected_review_status")
@@ -163,11 +168,12 @@ def evaluate_response(case: Case, response: str) -> list[str]:
     if expected["expect_json"] and report.payload is None:
         failures.append(report.json_error or "missing VERDICT_JSON")
     if report.payload is not None:
-        reported = {
-            item.get("class")
-            for item in report.payload.get("findings", [])
-            if isinstance(item, dict) and isinstance(item.get("class"), str)
-        }
+        reported: set[str] = set()
+        for item in report.payload.get("findings", []):
+            if isinstance(item, dict):
+                class_id = item.get("class")
+                if isinstance(class_id, str):
+                    reported.add(class_id)
         expected_classes = set(expected["expected_classes"])
         failures.extend(f"missing expected class {item}" for item in sorted(expected_classes - reported))
         failures.extend(f"unexpected class {item}" for item in sorted(reported - expected_classes))

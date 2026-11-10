@@ -1,0 +1,19 @@
+diff --git a/app.py b/app.py
+new file mode 100644
+index 0000000..9d4d7e8
+--- /dev/null
++++ b/app.py
+@@ -0,0 +1,2 @@
++def greet(name: str) -> str:
++    return f"Hello, {name}!"
+diff --git a/tests/test_app.py b/tests/test_app.py
+new file mode 100644
+index 0000000..a3e15c1
+--- /dev/null
++++ b/tests/test_app.py
+@@ -0,0 +1,4 @@
++from app import greet
++
++
++def test_greet() -> None:
++    assert greet("Ada") == "Hello, Ada!"

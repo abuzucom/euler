@@ -7,10 +7,11 @@ reaches logs or error messages.
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
-import urllib.error
-import urllib.request
+import sys
+import urllib.parse
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -21,27 +22,52 @@ DEFAULT_PROFILE_PATH = Path(__file__).resolve().parent / "model_providers.json"
 ANTHROPIC_VERSION = "2023-06-01"
 REQUEST_TIMEOUT_SECONDS = 600
 ERROR_BODY_LIMIT = 500
+HTTPS_PORT = 443
+HTTP_ERROR_MIN_STATUS = 400
 
 Transport = Callable[[str, dict, dict], dict]
+ConnectionFactory = Callable[[str, int, float], http.client.HTTPSConnection]
 
 
 class ModelCallError(RuntimeError):
     """The provider call failed or returned an unusable response."""
 
 
-def post_json(url: str, headers: dict, body: dict) -> dict:
-    """POST a JSON body and return the decoded JSON response."""
-    request = urllib.request.Request(
-        url, data=json.dumps(body).encode("utf-8"), headers={**headers, "Content-Type": "application/json"}
-    )
+def open_https_connection(host: str, port: int, timeout: float) -> http.client.HTTPSConnection:
+    """Return an HTTPS connection with default certificate verification."""
+    return http.client.HTTPSConnection(host, port, timeout=timeout)
+
+
+def post_json(
+    url: str, headers: dict, body: dict, connection_factory: ConnectionFactory = open_https_connection
+) -> dict:
+    """POST a JSON body over HTTPS and return the decoded JSON response."""
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme != "https" or not parts.hostname:
+        raise ModelCallError(f"provider URL must use https: {url}. Fix the endpoint in model_providers.json.")
+    path = parts.path + (f"?{parts.query}" if parts.query else "")
+    payload = json.dumps(body).encode("utf-8")
+    connection = connection_factory(parts.hostname, parts.port or HTTPS_PORT, REQUEST_TIMEOUT_SECONDS)
     try:
-        with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as error:
-        detail = error.read().decode("utf-8", errors="replace")[:ERROR_BODY_LIMIT]
-        raise ModelCallError(f"provider returned HTTP {error.code}: {detail}. Check the model and quota.") from error
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
+        connection.request("POST", path, body=payload, headers={**headers, "Content-Type": "application/json"})
+        response = connection.getresponse()
+        raw = response.read()
+    except (OSError, http.client.HTTPException) as error:
         raise ModelCallError(f"provider request failed: {error}. Retry the review run.") from error
+    finally:
+        connection.close()
+    if response.status >= HTTP_ERROR_MIN_STATUS:
+        # The body can name the account, organization, or quota. Keep it in the run log and out of the PR
+        # comment. Collapsing it to one line stops it from starting a '::' workflow command line.
+        detail = " ".join(raw.decode("utf-8", errors="replace")[:ERROR_BODY_LIMIT].split())
+        sys.stderr.write(f"provider error body: {detail}\n")
+        raise ModelCallError(
+            f"provider returned HTTP {response.status}. Check the model and quota in the workflow run log."
+        )
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ModelCallError(f"provider response is not JSON: {error}. Retry the review run.") from error
 
 
 def load_profile(profile_path: Path) -> dict:
@@ -49,7 +75,9 @@ def load_profile(profile_path: Path) -> dict:
     data = json.loads(profile_path.read_text(encoding="utf-8"))
     profile = data["providers"][data["active_provider"]]
     if profile["endpoint"] not in ALLOWED_ENDPOINTS:
-        raise ModelCallError(f"endpoint {profile['endpoint']} is not allowlisted. Use an endpoint in ALLOWED_ENDPOINTS.")
+        raise ModelCallError(
+            f"endpoint {profile['endpoint']} is not allowlisted. Use an endpoint in ALLOWED_ENDPOINTS."
+        )
     return profile
 
 
@@ -99,7 +127,9 @@ def read_text_field(protocol: str, response: dict) -> str:
             return response["choices"][0]["message"]["content"]
         return "".join(block["text"] for block in response["content"] if block.get("type") == "text")
     except (KeyError, IndexError, TypeError) as error:
-        raise ModelCallError(f"unexpected {protocol} response shape: missing {error}. Check the provider API.") from error
+        raise ModelCallError(
+            f"unexpected {protocol} response shape: missing {error}. Check the provider API."
+        ) from error
 
 
 def extract_text(protocol: str, response: dict) -> str:

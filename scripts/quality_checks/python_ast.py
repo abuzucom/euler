@@ -10,9 +10,19 @@ from typing import TypeGuard
 from .common import Finding
 
 TERMINAL_STATEMENTS = (ast.Return, ast.Raise, ast.Break, ast.Continue)
-MUTATING_METHODS = frozenset(
-    {"remove", "pop", "append", "clear", "insert", "extend", "add", "discard", "update", "popitem", "setdefault"}
-)
+MUTATING_METHODS = frozenset({
+    "remove",
+    "pop",
+    "append",
+    "clear",
+    "insert",
+    "extend",
+    "add",
+    "discard",
+    "update",
+    "popitem",
+    "setdefault",
+})
 VIEW_METHODS = frozenset({"items", "keys", "values"})
 DEPTH_PARAMETER_HINTS = ("depth", "level")
 DEPTH_PARAMETER_NAMES = frozenset({"limit", "max_depth", "remaining"})

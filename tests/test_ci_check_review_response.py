@@ -83,7 +83,10 @@ class ValidateTest(unittest.TestCase):
     def test_missing_confidence_rejected(self) -> None:
         entry = finding("M1")
         del entry["confidence"]
-        self.assertIn("finding confidence must be certain or likely", self.problems(build_report("BLOCK", [entry], self.dismissed())))
+        self.assertIn(
+            "finding confidence must be certain or likely",
+            self.problems(build_report("BLOCK", [entry], self.dismissed())),
+        )
 
     def test_schema_version_required(self) -> None:
         report = build_report("APPROVE", [], self.dismissed(), schema_version="2")
