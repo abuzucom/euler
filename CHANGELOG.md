@@ -12,6 +12,10 @@ loading `QUALITY.md` into a deployment.
 
 - Updated the foucault integration pin to v3.7.1 and ported the upstream
   capacity handling, verdict-record dedupe, and pin verification.
+- Hardened the review against API-derived checkout refs. The worktree stays
+  on the repository's default branch, the base and head arrive as git
+  objects, and the reusable workflow pins `model_call_command` to the
+  trusted adapter.
 - Moved the review implementation into a reusable `security-review.yml`.
   Both execution paths call it as a local reusable workflow.
 - Ported the upstream fork review. A fork pull request runs the protected

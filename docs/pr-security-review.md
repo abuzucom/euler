@@ -48,8 +48,10 @@ The capacity steps then write a fixed `NEEDS-HUMAN` report on exit 3.
 5. A same-repository pull request runs the `review` job. A fork pull request
    with the `safe-to-review` label runs `fork-review` behind the environment.
    Any other fork pull request runs `fork-review-skipped`.
-6. `review` checks out the base revision and the pinned foucault revision.
-7. `review` fetches the head object without a checkout.
+6. `review` checks out the repository's default branch and the pinned
+   foucault revision. No API-derived ref is ever checked out.
+7. `review` fetches the base and head pull request objects into the trusted
+   checkout's object store.
 8. `review` builds the case. An oversized diff writes a fixed capacity report
    with a `NEEDS-HUMAN` verdict instead of a model call.
 9. `review` calls the model. An input above every model budget writes the same
@@ -98,10 +100,14 @@ review when the first run already finished.
 
 - Every foucault script path carries the `.foucault/` prefix. Upstream
   adopters copy the adapter scripts into their own checkout.
-- The workflow gates fork review on the `safe-to-review` label, the
-  compliance runner, and the `fork-review` environment. The compliance
-  runner binds the checker's own trusted step schema, which carries
-  upstream's checkout and setup-python pins instead of euler's.
+- Euler's reusable workflow pins `model_call_command` to the adapter
+  command. Upstream keeps it a public input for adopter compatibility.
+- The compliance checker accepts only the hash-verified pip install
+  command. Upstream still accepts the plain install during its own
+  transition.
+- The pull request review holds the worktree on the repository's default
+  branch and fetches the base and head as git objects. Upstream checks out
+  the pull request base revision.
 - The vendored checker modules under `scripts/` carry euler's compliance
   configuration. The branch-prefix list accepts euler's `ci/` prefix.
 - The caller keeps read-only permissions at workflow level and per-job
@@ -114,13 +120,14 @@ review when the first run already finished.
 
 `same_repository == false` plus the `safe-to-review` label plus a successful
 compliance run on the same head makes resolve-pr mark the head as approved.
-The pull request author or a maintainer applies the label before requesting
-review; the workflow only reads it. The `fork-review` caller selects the
-reusable workflow's `fork-review` job, which attaches the `fork-review`
-environment. GitHub waits for environment approval and exposes environment
-secrets before the model call. The caller maps `OLLAMA_API_KEY` to
-`MODEL_API_KEY`, and an environment secret with the same name takes
-precedence inside the protected job.
+The label is a capacity gate. The environment approval and the compliance
+run carry the security gate. The pull request author or a maintainer applies
+the label before requesting review; the workflow only reads it. The
+`fork-review` caller selects the reusable workflow's `fork-review` job,
+which attaches the `fork-review` environment. GitHub waits for environment
+approval and exposes environment secrets before the model call. The caller
+maps `OLLAMA_API_KEY` to `MODEL_API_KEY`, and an environment secret with the
+same name takes precedence inside the protected job.
 
 ## Compliance
 

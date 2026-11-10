@@ -41,16 +41,15 @@ CODE_SUFFIXES = {
     ".tsx",
 }
 EVALUATION_FIXTURE_PREFIX = "eval/cases/"
-TRUSTED_REQUIREMENTS_COMMAND = "python -m pip install --requirement trusted-base/requirements-checkers.txt"
-# Accepted ahead of the workflow change. pull_request_target validates the
-# head workflow with the base checker, so the checker must accept the hashed
-# install before a pull request can switch the workflow to it.
-HASHED_REQUIREMENTS_COMMAND = (
-    "python -m pip install --require-hashes --requirement trusted-base/requirements-checkers.txt"
+# The workflow installs with --require-hashes. The checker accepts only the
+# hashed command, so a pull request cannot downgrade to an unverified
+# install.
+TRUSTED_REQUIREMENTS_COMMAND = (
+    "python -m pip install --require-hashes "
+    "--requirement trusted-base/requirements-checkers.txt"
 )
 TRUSTED_REQUIREMENTS_COMMANDS = (
     TRUSTED_REQUIREMENTS_COMMAND,
-    HASHED_REQUIREMENTS_COMMAND,
 )
 TRUSTED_SCAN_COMMAND = (
     'python "$TRUSTED_CHECKER" --repo "$PR_REPO" --tree "$PR_HEAD_SHA" '

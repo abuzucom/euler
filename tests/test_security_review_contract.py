@@ -228,16 +228,58 @@ class SecurityReviewReusableTests(unittest.TestCase):
     def test_case_builder_diffs_from_the_merge_base(self) -> None:
         build = extract_step(self.reusable, "Build provenance-labeled case text")
         self.assertIn("AUDIT_PROMPT_FILE: .foucault/AUDIT.md", build)
-        fetch = extract_step(self.reusable, "Fetch pull request head object")
+        fetch = extract_step(self.reusable, "Fetch pull request objects")
         self.assertNotIn("--depth=1", fetch)
         self.assertIn(
             "Full history lets the case builder diff from the merge base",
+            fetch,
+        )
+        self.assertIn(
+            '["git", "fetch", "--no-tags", "origin", base_sha]',
             fetch,
         )
         adapter = extract_step(self.reusable, "Run model call")
         self.assertIn(
             'python3 .foucault/ci/run_model_command.py "$MODEL_CALL_COMMAND"',
             adapter,
+        )
+
+    def test_no_api_derived_ref_is_checked_out(self) -> None:
+        checkout = extract_step(self.reusable, "Checkout the trusted review repository")
+        self.assertNotIn("ref: ${{ steps.resolve.outputs.", checkout)
+        self.assertIn("persist-credentials: false", checkout)
+        self.assertNotIn(
+            "ref: ${{ steps.resolve.outputs.base_sha }}",
+            self.reusable,
+        )
+        self.assertIn("no API-derived ref is ever checked out", self.reusable)
+
+    def test_model_call_command_is_pinned_to_the_trusted_adapter(self) -> None:
+        self.assertIn(
+            "INPUT_MODEL_CALL_COMMAND: ${{ inputs.model_call_command }}",
+            self.reusable,
+        )
+        self.assertIn(
+            "model call command is not the trusted adapter",
+            self.reusable,
+        )
+        self.assertIn(r"/^python3 ci\/call_model\.py$/", self.reusable)
+
+    def test_requirements_install_is_hash_verified_only(self) -> None:
+        spec = importlib.util.spec_from_file_location(
+            "_compliance_requirements",
+            ROOT / "scripts" / "check_compliance_tree.py",
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(
+            module.TRUSTED_REQUIREMENTS_COMMANDS,
+            (module.TRUSTED_REQUIREMENTS_COMMAND,),
+        )
+        self.assertIn("require-hashes", module.TRUSTED_REQUIREMENTS_COMMAND)
+        self.assertNotIn(
+            "pip install --requirement",
+            module.TRUSTED_REQUIREMENTS_COMMANDS[0],
         )
 
     def test_audit_ref_is_validated_as_a_full_sha(self) -> None:

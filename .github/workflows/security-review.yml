@@ -88,6 +88,7 @@ jobs:
         env:
           INPUT_PR_NUMBER: ${{ inputs.pr_number }}
           INPUT_AUDIT_REF: ${{ inputs.audit_ref }}
+          INPUT_MODEL_CALL_COMMAND: ${{ inputs.model_call_command }}
           INPUT_BASE_SHA: ${{ inputs.base_sha }}
           INPUT_HEAD_SHA: ${{ inputs.head_sha }}
           INPUT_HEAD_REPO_URL: ${{ inputs.head_repo_url }}
@@ -128,6 +129,13 @@ jobs:
             try {
               if (!auditRefPattern.test(process.env.INPUT_AUDIT_REF || "")) {
                 throw new Error("audit policy revision is invalid");
+              }
+              if (
+                !/^python3 ci\/call_model\.py$/.test(
+                  process.env.INPUT_MODEL_CALL_COMMAND || ""
+                )
+              ) {
+                throw new Error("model call command is not the trusted adapter");
               }
               core.setOutput("audit_ref", process.env.INPUT_AUDIT_REF);
               if (inputValues.some((value) => value)) {
@@ -192,10 +200,13 @@ jobs:
               core.setFailed(error.message);
             }
 
-      - name: Checkout pull request
+      # The review repository carries the worktree the case builder uses.
+      # workflow_run pins github.sha to the default branch, so this checkout
+      # holds trusted content. The pull request base and head travel as git
+      # objects; no API-derived ref is ever checked out.
+      - name: Checkout the trusted review repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          ref: ${{ steps.resolve.outputs.base_sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -236,22 +247,29 @@ jobs:
           done
           exit "$missing"
 
-      - name: Fetch pull request head object
+      - name: Fetch pull request objects
         env:
           PR_HEAD_REPO_URL: ${{ steps.resolve.outputs.head_repo_url }}
           HEAD_REPO_FULL_NAME: ${{ steps.resolve.outputs.head_repo_full_name }}
           BASE_REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ steps.resolve.outputs.base_sha }}
           HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
         run: |
           set -euo pipefail
-          python3 - "$PR_HEAD_REPO_URL" "$HEAD_REPO_FULL_NAME" "$BASE_REPOSITORY" "$HEAD_SHA" <<'PY'
+          python3 - "$PR_HEAD_REPO_URL" "$HEAD_REPO_FULL_NAME" "$BASE_REPOSITORY" "$BASE_SHA" "$HEAD_SHA" <<'PY'
           import os
           import re
           import subprocess
           import sys
           from urllib.parse import urlsplit
 
-          repository_url, head_repository, base_repository, head_sha = sys.argv[1:]
+          (
+              repository_url,
+              head_repository,
+              base_repository,
+              base_sha,
+              head_sha,
+          ) = sys.argv[1:]
           parsed = urlsplit(repository_url)
           if parsed.scheme != "https" or parsed.hostname != "github.com":
               raise SystemExit("PR head repository URL is not an approved GitHub URL")
@@ -260,9 +278,17 @@ jobs:
               or parsed.fragment
               or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", head_repository)
               or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", base_repository)
+              or not re.fullmatch(r"[0-9a-f]{40}", base_sha)
               or not re.fullmatch(r"[0-9a-f]{40}", head_sha)
           ):
               raise SystemExit("PR head metadata is invalid")
+          # The base repository equals the caller repository, which is also
+          # the origin of this checkout. The base arrives as objects from
+          # the trusted origin alone.
+          subprocess.run(
+              ["git", "fetch", "--no-tags", "origin", base_sha],
+              check=True,
+          )
           fetch_source = (
               "origin"
               if head_repository.casefold() == base_repository.casefold()
