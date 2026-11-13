@@ -443,6 +443,20 @@ def chunk_budget(
     return budget, escaped_size
 
 
+def check_envelope_size(name: str, text: str) -> None:
+    """Raise RuntimeError when a serialized envelope exceeds MAX_ENVELOPE_BYTES.
+
+    The guard measures the written text. It holds the bound for every budget
+    option and for any serializer change in review_envelope.
+    """
+    size = len(text.encode("utf-8"))
+    if size > MAX_ENVELOPE_BYTES:
+        raise RuntimeError(
+            f"envelope {name} holds {size} bytes, above the {MAX_ENVELOPE_BYTES}-byte model budget. "
+            "Lower --max-bytes or --max-chars."
+        )
+
+
 def build(options: BuildOptions) -> None:
     """Write envelopes, prescan.json, and manifest.json to the output directory."""
     for revision in (options.base, options.head):
@@ -471,6 +485,7 @@ def build(options: BuildOptions) -> None:
             "PR", {path: patches[path] for path in files}, pr_context(options), chunk_prescan, metadata
         )
         name = f"{index:03d}.json"
+        check_envelope_size(name, text)
         (envelopes_dir / name).write_text(text, encoding="utf-8")
         manifest_chunks.append({"envelope": name, "files": files})
     write_json(options.out_dir / "prescan.json", prescan)

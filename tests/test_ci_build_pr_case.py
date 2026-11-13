@@ -186,6 +186,18 @@ class BuildTest(GitRepoCase):
         manifest = json.loads((self.build(base, head, max_bytes=500) / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(len(manifest["chunks"]), 2)
 
+    def test_envelope_over_the_context_fails_the_build(self) -> None:
+        base = self.commit({"a.txt": "x\n"})
+        head = self.commit({"big.txt": "y" * 99 + "\n"})
+        oversized_budget = (build_pr_case.MAX_ENVELOPE_BYTES * 2, build_pr_case.escaped_size)
+        with (
+            mock.patch.object(build_pr_case, "MAX_ENVELOPE_BYTES", 50),
+            mock.patch.object(build_pr_case, "chunk_budget", return_value=oversized_budget),
+            self.assertRaises(RuntimeError) as context,
+        ):
+            self.build(base, head)
+        self.assertIn("001.json", str(context.exception))
+
     def test_character_and_byte_budgets_together_rejected(self) -> None:
         base = self.commit({"a.txt": "x\n"})
         head = self.commit({"b.txt": "y\n"})

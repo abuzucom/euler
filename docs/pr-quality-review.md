@@ -182,7 +182,8 @@ the PR text, every path, and every prescan item from that limit. The rest
 holds escaped patch bytes. A model with a smaller context needs a smaller
 `MODEL_CONTEXT_TOKENS`. A new reply size needs a matching `REPLY_TOKENS`.
 `--max-bytes` sets an explicit byte budget per chunk. `--max-chars` sets a
-character budget and skips the byte bound.
+character budget. The builder measures every written envelope. An envelope
+above `MAX_ENVELOPE_BYTES` fails the build under every budget option.
 
 Edit `active_provider` in `ci/model_providers.json`. The adapter supports the
 `ollama`, `openai-compatible`, and `anthropic` protocols. A new endpoint needs

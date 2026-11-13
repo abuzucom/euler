@@ -26,6 +26,8 @@ loading `QUALITY.md` into a deployment.
 
 - Added `--max-bytes` to `ci/build_pr_case.py`. `--max-chars` keeps its
   character budget.
+- Added a size guard to `ci/build_pr_case.py`. The builder measures each
+  serialized envelope. An envelope above the model budget fails the build.
 - Capped the retry note in `ci/run_review.py` at 50 problems of 300
   characters each, with control characters replaced.
 
