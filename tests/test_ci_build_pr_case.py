@@ -306,6 +306,10 @@ class BuildTest(GitRepoCase):
         patch = "@@ -1,2 +1,3 @@\n a\n-b\n+c\n+d\n@@ -10 +11,2 @@\n x\n+y\n"
         self.assertEqual(build_pr_case.parse_added_lines(patch), [2, 3, 12])
 
+    def test_parse_added_lines_counts_content_starting_with_plus_plus(self) -> None:
+        patch = "diff --git a/a.c b/a.c\n--- a/a.c\n+++ b/a.c\n@@ -1,2 +1,4 @@\n ctx\n+++counter;\n+bad();\n ctx2\n"
+        self.assertEqual(build_pr_case.parse_added_lines(patch), [2, 3])
+
     def test_read_blobs_returns_blob_bodies(self) -> None:
         head = self.commit({"a.txt": "alpha\n"})
         blob_sha = self.git("rev-parse", f"{head}:a.txt").strip()

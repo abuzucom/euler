@@ -153,12 +153,16 @@ class CallOptions:
 
 
 LEGACY_OPTION_NAMES = ("transport", "profile_path", "api_key")
+# call_model always takes system_prompt, mode, and case_text by position.
+REQUIRED_POSITIONAL_COUNT = 3
 
 
 def resolve_options(options: CallOptions | None, legacy_positional: tuple, legacy_keywords: dict) -> CallOptions:
     """Return call options. Accept the pre-0.3.0 parameters with a DeprecationWarning."""
     if len(legacy_positional) > len(LEGACY_OPTION_NAMES):
-        raise TypeError(f"call_model takes at most {len(LEGACY_OPTION_NAMES) + 3} positional arguments")
+        raise TypeError(
+            f"call_model takes at most {len(LEGACY_OPTION_NAMES) + REQUIRED_POSITIONAL_COUNT} positional arguments"
+        )
     unknown = sorted(set(legacy_keywords) - set(LEGACY_OPTION_NAMES))
     if unknown:
         raise TypeError(f"call_model got unexpected keyword arguments: {', '.join(unknown)}")

@@ -13,7 +13,6 @@ invocation or trusted CI configuration.
 from __future__ import annotations
 
 import argparse
-import importlib
 import json
 import sys
 from collections.abc import Callable
@@ -21,12 +20,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import check_quality_policy  # resolved through the path set above
 import quality_checks  # resolved through the path set above
 import review_envelope  # resolved through the path set above
 import review_report  # resolved through the path set above
+
+# run_eval.load_model_call stays importable for existing callers.
+from ci.run_review import load_model_call  # resolved through the path set above
 
 MODES = ("PR", "File", "Piece", "Wholesale")
 PR_VERDICTS = ("APPROVE", "BLOCK", "NEEDS-HUMAN")
@@ -148,6 +151,20 @@ def build_case_text(case: Case, case_dir: Path) -> str:
     return review_envelope.build_envelope(case.expected["mode"], case.files, case.context, prescan, metadata)
 
 
+def verdict_matches(mode: str, expected_verdict: str, report: review_report.ParsedReport) -> bool:
+    """Return True when the report's final line carries the expected verdict as a whole token."""
+    if mode == "PR":
+        return report.label == "VERDICT" and report.token == expected_verdict
+    if expected_verdict == "NEEDS-HUMAN":
+        # Piece mode allows NEEDS-HUMAN in place of a partial risk level.
+        return report.token == expected_verdict
+    final_line = f"{report.label}: {report.value}" if report.label else ""
+    if not final_line.startswith(expected_verdict):
+        return False
+    remainder = final_line[len(expected_verdict) :]
+    return not remainder or not (remainder[0].isalnum() or remainder[0] == "-")
+
+
 def evaluate_response(case: Case, response: str) -> list[str]:
     """Return mismatches between a model report and the case expectation."""
     report = review_report.parse_report(response)
@@ -156,7 +173,7 @@ def evaluate_response(case: Case, response: str) -> list[str]:
     final_line = f"{report.label}: {report.value}" if report.label else ""
     if expected.get("forbid_process_narration") and review_report.contains_process_narration(response):
         failures.append("report contains process narration")
-    if expected["expected_verdict"] not in final_line:
+    if not verdict_matches(expected["mode"], expected["expected_verdict"], report):
         failures.append(f"expected verdict '{expected['expected_verdict']}' in final line '{final_line}'")
     expected_status = expected.get("expected_review_status")
     if expected_status is not None:
@@ -166,25 +183,17 @@ def evaluate_response(case: Case, response: str) -> list[str]:
     if expected["expect_json"] and report.payload is None:
         failures.append(report.json_error or "missing VERDICT_JSON")
     if report.payload is not None:
-        reported: set[str] = set()
-        for item in report.payload.get("findings", []):
-            if isinstance(item, dict):
-                class_id = item.get("class")
-                if isinstance(class_id, str):
-                    reported.add(class_id)
-        expected_classes = set(expected["expected_classes"])
-        failures.extend(f"missing expected class {item}" for item in sorted(expected_classes - reported))
-        failures.extend(f"unexpected class {item}" for item in sorted(reported - expected_classes))
+        failures.extend(class_failures(report.payload.get("findings", []), set(expected["expected_classes"])))
     return failures
 
 
-def load_model_call(spec: str) -> ModelCall:
-    """Import module:function from a trusted specification."""
-    module_name, _, function_name = spec.partition(":")
-    if not module_name or not function_name:
-        raise ValueError(f"--model-call must look like module:function, got '{spec}'")
-    sys.path.insert(0, str(REPO_ROOT))
-    return getattr(importlib.import_module(module_name), function_name)
+def class_failures(findings: object, expected_classes: set[str]) -> list[str]:
+    """Return mismatches between reported finding classes and the expected classes."""
+    if not isinstance(findings, list):
+        return ["VERDICT_JSON findings must be an array"]
+    reported = {item["class"] for item in findings if isinstance(item, dict) and isinstance(item.get("class"), str)}
+    missing = [f"missing expected class {item}" for item in sorted(expected_classes - reported)]
+    return missing + [f"unexpected class {item}" for item in sorted(reported - expected_classes)]
 
 
 def run_live(cases_dir: Path, policy_path: Path, model_call: ModelCall) -> int:

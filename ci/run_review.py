@@ -179,8 +179,14 @@ def gate_status(verdict: str, fail_on_block: bool) -> int:
 
 
 def load_model_call(spec: str) -> ModelCall:
-    """Import a trusted module:function model callable."""
+    """Import a trusted module:function model callable. eval/run_eval.py shares this loader.
+
+    Raises:
+        ValueError: The spec lacks a module or a function name.
+    """
     module_name, _, function_name = spec.partition(":")
+    if not module_name or not function_name:
+        raise ValueError(f"model call spec must look like module:function, got '{spec}'")
     return getattr(importlib.import_module(module_name), function_name)
 
 
