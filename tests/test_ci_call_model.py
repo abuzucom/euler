@@ -96,6 +96,11 @@ class CallModelTest(unittest.TestCase):
         for profile in data["providers"].values():
             self.assertIn(profile["endpoint"], call_model.ALLOWED_ENDPOINTS)
 
+    def test_repository_profile_runs_the_large_context_model(self) -> None:
+        # The one-call review budget in build_pr_case.py assumes this model's context.
+        data = json.loads((REPO_ROOT / "ci" / "model_providers.json").read_text(encoding="utf-8"))
+        self.assertEqual(data["providers"][data["active_provider"]]["model"], "minimax-m3.1-flash")
+
 
 class EmptyOutputTest(unittest.TestCase):
     """Reasoning models must not exhaust the budget. Empty text must fail loudly."""

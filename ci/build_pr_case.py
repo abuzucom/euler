@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -30,7 +31,22 @@ import review_envelope  # resolved through the path set above
 
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 HUNK_HEADER = re.compile(r"^@@ -\d+(?:,\d+)? \+(?P<start>\d+)(?:,\d+)? @@")
-DEFAULT_MAX_CHARS = 120_000
+# The default chunk budget counts envelope bytes, not characters. A byte-level
+# BPE tokenizer emits at most one token per UTF-8 byte. The byte count then
+# bounds the token count for any text, including CJK, emoji, and JSON escapes.
+# minimax-m3.1-flash accepts 976,000 tokens of context, its reply included.
+MODEL_CONTEXT_TOKENS = 976_000
+# Matches max_output_tokens of the active profile in ci/model_providers.json.
+REPLY_TOKENS = 16_384
+# scripts/check_quality_policy.py caps QUALITY.md, the system prompt, at 32 KiB.
+POLICY_TOKENS = 32_768
+# Chat template role markers around the system prompt and the envelope.
+CHAT_TEMPLATE_TOKENS = 4_096
+# ci/run_review.py adds a capped validation problem list on the retry.
+RETRY_NOTE_TOKENS = 65_536
+MAX_ENVELOPE_BYTES = MODEL_CONTEXT_TOKENS - REPLY_TOKENS - POLICY_TOKENS - CHAT_TEMPLATE_TOKENS - RETRY_NOTE_TOKENS
+# json.dumps wraps a string in two quote bytes.
+JSON_QUOTE_BYTES = 2
 # Each chunk costs up to two model calls. Files in chunks past the limit become unreviewed.
 DEFAULT_MAX_CHUNKS = 20
 BINARY_NUMSTAT = b"-"
@@ -61,8 +77,12 @@ class BuildOptions:
     body: str
     pr_number: int
     exclude: list[str] = field(default_factory=list)
-    max_chars: int = DEFAULT_MAX_CHARS
+    # A character budget per chunk. Without max_chars or max_bytes, the
+    # builder derives a byte budget from MAX_ENVELOPE_BYTES.
+    max_chars: int | None = None
     max_chunks: int = DEFAULT_MAX_CHUNKS
+    # A per-chunk budget in escaped UTF-8 patch bytes.
+    max_bytes: int | None = None
 
 
 def git_executable() -> str:
@@ -224,21 +244,32 @@ def limit_chunks(chunks: list[list[str]], max_chunks: int) -> tuple[list[list[st
     return chunks[:max_chunks], [path for chunk in chunks[max_chunks:] for path in chunk]
 
 
-def pack_chunks(patches: dict[str, str], max_chars: int) -> tuple[list[list[str]], list[str]]:
-    """Group files into chunks under the budget. Return chunks and oversized files."""
+def escaped_size(text: str) -> int:
+    """Return the UTF-8 byte length of text inside a serialized envelope string."""
+    return len(json.dumps(text, ensure_ascii=False).encode("utf-8")) - JSON_QUOTE_BYTES
+
+
+def pack_chunks(
+    patches: dict[str, str], max_chars: int, measure: Callable[[str], int] = len
+) -> tuple[list[list[str]], list[str]]:
+    """Group files into chunks under the budget. Return chunks and oversized files.
+
+    measure gives each patch's cost in the budget's unit. The default counts characters.
+    """
     chunks: list[list[str]] = []
     oversized = []
     current: list[str] = []
     size = 0
     for path, patch in patches.items():
-        if len(patch) > max_chars:
+        cost = measure(patch)
+        if cost > max_chars:
             oversized.append(path)
             continue
-        if current and size + len(patch) > max_chars:
+        if current and size + cost > max_chars:
             chunks.append(current)
             current, size = [], 0
         current.append(path)
-        size += len(patch)
+        size += cost
     if current:
         chunks.append(current)
     return chunks, oversized
@@ -370,6 +401,62 @@ def write_json(path: Path, data: object) -> None:
     path.write_text(json.dumps(data, indent=JSON_INDENT) + "\n", encoding="utf-8")
 
 
+def pr_context(options: BuildOptions) -> str:
+    """Return the pull request title and body as envelope context."""
+    return f"Title: {options.title}\n\n{options.body}"
+
+
+def chunk_metadata(options: BuildOptions, chunk: str, changed: list[str], unreviewed: list[str]) -> dict:
+    """Return the trusted metadata for one envelope."""
+    return {
+        "pr_number": options.pr_number,
+        "base_sha": options.base,
+        "head_sha": options.head,
+        "chunk": chunk,
+        "changed_files": changed,
+        "unreviewed": unreviewed,
+    }
+
+
+def chunk_budget(
+    options: BuildOptions, changed: list[str], unreviewed_bound: list[str], prescan: list[dict]
+) -> tuple[int, Callable[[str], int]]:
+    """Return the per-chunk patch budget and the patch measure in its unit.
+
+    The derived budget subtracts an envelope with every path, every prescan item,
+    and empty patches. Each chunk envelope holds a subset of that content. Its
+    size equals that subset plus the escaped bytes of its patches.
+    """
+    if options.max_chars is not None:
+        return options.max_chars, len
+    if options.max_bytes is not None:
+        return options.max_bytes, escaped_size
+    widest_chunk = f"{options.max_chunks}/{options.max_chunks}"
+    metadata = chunk_metadata(options, widest_chunk, changed, unreviewed_bound)
+    skeleton = review_envelope.build_envelope("PR", dict.fromkeys(changed, ""), pr_context(options), prescan, metadata)
+    budget = MAX_ENVELOPE_BYTES - len(skeleton.encode("utf-8"))
+    if budget < 1:
+        raise ValueError(
+            f"the pull request text and file list fill the {MAX_ENVELOPE_BYTES}-byte envelope budget. "
+            "Shorten the pull request body or split the pull request."
+        )
+    return budget, escaped_size
+
+
+def check_envelope_size(name: str, text: str) -> None:
+    """Raise RuntimeError when a serialized envelope exceeds MAX_ENVELOPE_BYTES.
+
+    The guard measures the written text. It holds the bound for every budget
+    option and for any serializer change in review_envelope.
+    """
+    size = len(text.encode("utf-8"))
+    if size > MAX_ENVELOPE_BYTES:
+        raise RuntimeError(
+            f"envelope {name} holds {size} bytes, above the {MAX_ENVELOPE_BYTES}-byte model budget. "
+            "Lower --max-bytes or --max-chars."
+        )
+
+
 def build(options: BuildOptions) -> None:
     """Write envelopes, prescan.json, and manifest.json to the output directory."""
     for revision in (options.base, options.head):
@@ -377,30 +464,28 @@ def build(options: BuildOptions) -> None:
             raise ValueError(f"revision {revision!r} is not a full lowercase commit SHA")
     if options.max_chunks < 1:
         raise ValueError(f"max_chunks {options.max_chunks} is below 1. Pass a positive chunk limit.")
+    if options.max_chars is not None and options.max_bytes is not None:
+        raise ValueError("max_chars and max_bytes are both set. Pass one chunk budget.")
     changed, binary, patches, undecodable = read_diff(options)
     patches, empty = split_empty_patches(patches)
-    chunks, oversized = pack_chunks(patches, options.max_chars)
-    chunks, overflow = limit_chunks(chunks, options.max_chunks)
     prescan, unparsed = build_prescan(options, changed, patches)
+    # Oversized and overflow files come from patches, so listing every patch path bounds them.
+    unreviewed_bound = sorted(binary) + undecodable + empty + list(patches) + unparsed
+    budget, measure = chunk_budget(options, changed, unreviewed_bound, prescan)
+    chunks, oversized = pack_chunks(patches, budget, measure)
+    chunks, overflow = limit_chunks(chunks, options.max_chunks)
     unreviewed = sorted(binary) + undecodable + empty + oversized + overflow + unparsed
     envelopes_dir = options.out_dir / "envelopes"
     envelopes_dir.mkdir(parents=True, exist_ok=True)
-    context = f"Title: {options.title}\n\n{options.body}"
     manifest_chunks = []
     for index, files in enumerate(chunks, 1):
-        metadata = {
-            "pr_number": options.pr_number,
-            "base_sha": options.base,
-            "head_sha": options.head,
-            "chunk": f"{index}/{len(chunks)}",
-            "changed_files": changed,
-            "unreviewed": unreviewed,
-        }
+        metadata = chunk_metadata(options, f"{index}/{len(chunks)}", changed, unreviewed)
         chunk_prescan = [item for item in prescan if item["file"] in files]
         text = review_envelope.build_envelope(
-            "PR", {path: patches[path] for path in files}, context, chunk_prescan, metadata
+            "PR", {path: patches[path] for path in files}, pr_context(options), chunk_prescan, metadata
         )
         name = f"{index:03d}.json"
+        check_envelope_size(name, text)
         (envelopes_dir / name).write_text(text, encoding="utf-8")
         manifest_chunks.append({"envelope": name, "files": files})
     write_json(options.out_dir / "prescan.json", prescan)
@@ -424,7 +509,9 @@ def main() -> int:
     parser.add_argument("--pr-number", type=int, required=True)
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--exclude", default="", help="whitespace-separated globs skipped by the prescan")
-    parser.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
+    budget = parser.add_mutually_exclusive_group()
+    budget.add_argument("--max-chars", type=int, help="per-chunk patch budget in characters")
+    budget.add_argument("--max-bytes", type=int, help="per-chunk patch budget in escaped UTF-8 bytes")
     parser.add_argument("--max-chunks", type=int, default=DEFAULT_MAX_CHUNKS)
     args = parser.parse_args()
     options = BuildOptions(
@@ -437,6 +524,7 @@ def main() -> int:
         pr_number=args.pr_number,
         exclude=args.exclude.split(),
         max_chars=args.max_chars,
+        max_bytes=args.max_bytes,
         max_chunks=args.max_chunks,
     )
     try:

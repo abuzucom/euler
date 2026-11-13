@@ -141,7 +141,7 @@ request against `QUALITY.md`. The workflow runs the deterministic checkers,
 calls the configured model, validates the report, posts a comment, and gates
 on the verdict. [`quality-review-pr.yml`](.github/workflows/quality-review-pr.yml)
 calls it for this repository after `ci` completes. The active provider is
-Ollama with `kimi-k2.7-code`. The caller maps the `OLLAMA_API_KEY` secret to
+Ollama with `minimax-m3.1-flash`. The caller maps the `OLLAMA_API_KEY` secret to
 `MODEL_API_KEY`. See [`docs/pr-quality-review.md`](docs/pr-quality-review.md)
 for the event flow, the trust boundary, and adoption steps.
 

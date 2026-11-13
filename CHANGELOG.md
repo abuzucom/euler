@@ -6,6 +6,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.9.0] (2026-11-13)
+
+### Changed
+
+- Switched the quality review model to `minimax-m3.1-flash`. The foucault
+  security review already runs it, and its reports passed the format
+  validator on the first attempt.
+- Replaced the 120,000-character chunk budget in `ci/build_pr_case.py` with a
+  byte budget derived from the model context. The builder counts escaped
+  UTF-8 bytes. One byte bounds one token for a byte-level BPE tokenizer. The
+  budget reserves the reply, `QUALITY.md`, the chat template, the retry note,
+  the PR text, the paths, and the prescan items. One envelope holds up to
+  857,216 bytes. Most pull requests now take one model call. The reviewer
+  sees every changed file together. Larger pull requests still split into
+  chunks.
+
+### Added
+
+- Added `--max-bytes` to `ci/build_pr_case.py`. `--max-chars` keeps its
+  character budget.
+- Added a size guard to `ci/build_pr_case.py`. The builder measures each
+  serialized envelope. An envelope above the model budget fails the build.
+- Capped the retry note in `ci/run_review.py` at 50 problems of 300
+  characters each, with control characters replaced.
+
+### Removed
+
+- Removed the `DEFAULT_MAX_CHARS` constant. `BuildOptions.max_chars` now
+  defaults to `None`, which selects the derived byte budget.
+
 ## [0.8.7] (2026-11-13)
 
 ### Changed

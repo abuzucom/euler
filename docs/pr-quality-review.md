@@ -32,8 +32,9 @@ a report with a machine-readable verdict. The check fails on `BLOCK` or
    fails before a model request when the key is empty.
 9. The reusable workflow allows one active review per pull request. A newer
    head cancels an obsolete run. The review job stops after 45 minutes. The
-   `max_chunks` input caps envelopes at 20 by default. The model step stops
-   after 40 minutes. A run without a verdict publishes a blocking check.
+   `max_chunks` input caps envelopes at 20 by default. One envelope holds up
+   to 857,216 bytes. Most pull requests take one model call. The model step
+   stops after 40 minutes. A run without a verdict publishes a blocking check.
 10. The preparation job fetches the base commit by its full SHA. The
     same-repository path fetches the head commit by its full SHA. The fork
     path fetches the pull request ref and rejects a head mismatch.
@@ -78,7 +79,7 @@ item in the `prescan` array of `VERDICT_JSON`.
 - A blocking prescan finding from Q11, M1, M12, or M13 forces BLOCK.
 - These files become unreviewed files:
   - a binary file
-  - a file over the chunk budget
+  - a file over the chunk byte budget
   - a file in a chunk past `--max-chunks`, 20 by default
   - a path that is not valid UTF-8
   - a text file with an empty patch
@@ -161,6 +162,28 @@ branch.
   runs a live review against the active provider.
 
 ## Provider changes
+
+The active profile runs Ollama with `minimax-m3.1-flash`. Its 976,000-token
+context sets the chunk budget in `ci/build_pr_case.py`.
+
+The builder counts each envelope in UTF-8 bytes after JSON escaping. A
+byte-level BPE tokenizer emits at most one token per byte. The byte count then
+bounds the token count for any text. The context holds these reserves:
+
+| Reserve | Tokens |
+|---|---|
+| Model reply, `max_output_tokens` | 16,384 |
+| `QUALITY.md` at its 32 KiB cap | 32,768 |
+| Chat template role markers | 4,096 |
+| Retry note with capped validation problems | 65,536 |
+
+The remaining 857,216 bytes form `MAX_ENVELOPE_BYTES`. Each build subtracts
+the PR text, every path, and every prescan item from that limit. The rest
+holds escaped patch bytes. A model with a smaller context needs a smaller
+`MODEL_CONTEXT_TOKENS`. A new reply size needs a matching `REPLY_TOKENS`.
+`--max-bytes` sets an explicit byte budget per chunk. `--max-chars` sets a
+character budget. The builder measures every written envelope. An envelope
+above `MAX_ENVELOPE_BYTES` fails the build under every budget option.
 
 Edit `active_provider` in `ci/model_providers.json`. The adapter supports the
 `ollama`, `openai-compatible`, and `anthropic` protocols. A new endpoint needs
