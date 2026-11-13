@@ -52,7 +52,7 @@ def check_suppressions(path: Path, relative: str, text: str) -> list[Finding]:
     """M13: linter and type-checker suppressions and weakened CI steps."""
     if not is_code_or_config(path):
         return []
-    in_workflow = ".github/workflows/" in relative or relative.startswith(".github/workflows/")
+    in_workflow = ".github/workflows/" in relative
     findings = []
     for number, line in enumerate(text.splitlines(), 1):
         if any(marker in line for marker in SUPPRESSION_MARKERS):

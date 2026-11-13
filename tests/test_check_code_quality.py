@@ -134,6 +134,38 @@ class ResourceLeakCheckTest(CheckerCase):
     def test_returned_resource_clean(self) -> None:
         self.assert_clean("resource-leak", "Q11", {"a.py": "def f(p):\n    return open(p)\n"})
 
+    def test_exit_stack_enter_context_clean(self) -> None:
+        source = (
+            "import contextlib\n\n"
+            "def f(p):\n"
+            "    with contextlib.ExitStack() as stack:\n"
+            "        handle = stack.enter_context(open(p))\n"
+            "        return handle.read()\n"
+        )
+        self.assert_clean("resource-leak", "Q11", {"a.py": source})
+
+    def test_annotated_finally_close_clean(self) -> None:
+        source = (
+            "from typing import IO\n\n"
+            "def f(p):\n"
+            "    handle: IO[str] = open(p)\n"
+            "    try:\n"
+            "        return handle.read()\n"
+            "    finally:\n"
+            "        handle.close()\n"
+        )
+        self.assert_clean("resource-leak", "Q11", {"a.py": source})
+
+    def test_exit_stack_callback_with_resource_flagged(self) -> None:
+        # callback() registers the file object as a callable and never closes it.
+        source = (
+            "import contextlib\n\n"
+            "def f(p):\n"
+            "    with contextlib.ExitStack() as stack:\n"
+            "        stack.callback(open(p))\n"
+        )
+        self.assert_flags("resource-leak", "Q11", {"a.py": source})
+
 
 class MutableDefaultCheckTest(CheckerCase):
     def test_list_default(self) -> None:
@@ -275,6 +307,23 @@ class UnpinnedCheckTest(CheckerCase):
             ".github/workflows/ci.yml": "      - uses: actions/checkout@" + "a" * 40 + " # v4\n",
         }
         self.assert_clean("unpinned", "D1", files)
+
+    def unpinned_stderr(self, files: dict[str, str]) -> str:
+        """Run the unpinned check and return its stderr output."""
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            self.assertNotIn("D1", self.classes_for("unpinned", files))
+        return stderr.getvalue()
+
+    def test_non_object_package_section_warns(self) -> None:
+        warning = self.unpinned_stderr({"package.json": '{"dependencies": ["left-pad"]}'})
+        self.assertIn("package.json", warning)
+        self.assertIn("dependencies", warning)
+
+    def test_deeply_nested_package_json_warns(self) -> None:
+        depth = 100_000
+        warning = self.unpinned_stderr({"package.json": "[" * depth + "]" * depth})
+        self.assertIn("skipped", warning)
 
 
 class HashedRequirementsCheckTest(CheckerCase):

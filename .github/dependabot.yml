@@ -1,10 +1,15 @@
 ---
 # Weekly update PRs for SHA-pinned actions and the lint tool pins. Dependabot
 # opens PRs only. A human reviews and merges each one (AGENTS.md Rule 9).
+# immutable-conflict-check.yml and requirements-checkers.txt refresh from the
+# foucault pin (docs/pr-security-review.md). The trusted compliance schema
+# rejects any other pin in them, so Dependabot skips both paths.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
+    exclude-paths:
+      - ".github/workflows/immutable-conflict-check.yml"
     schedule:
       interval: weekly
     commit-message:
@@ -16,6 +21,8 @@ updates:
 
   - package-ecosystem: pip
     directory: /
+    exclude-paths:
+      - "requirements-checkers.txt"
     schedule:
       interval: weekly
     commit-message:

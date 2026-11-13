@@ -6,7 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
-## [0.8.4] (2026-11-13)
+## [0.8.6] (2026-11-13)
 
 ### Changed
 
@@ -14,6 +14,42 @@ loading `QUALITY.md` into a deployment.
   immutable compliance workflow. The trusted compliance checker accepts the
   same pins.
 - Pin `github/codeql-action` v4.39.3 in the CodeQL workflow.
+
+## [0.8.5] (2026-11-13)
+
+### Fixed
+
+- Compare the QUALITY.md diff report with the merge base instead of the base
+  branch tip. A pull request no longer reports policy and eval changes that
+  landed on `main` after it branched.
+- Keep Dependabot away from `immutable-conflict-check.yml` and
+  `requirements-checkers.txt`. The trusted compliance schema rejects any pin
+  in them other than the one refreshed from foucault.
+
+### Changed
+
+- Share one step list between the `review` and `fork-review` jobs of
+  `quality-review.yml` through a YAML anchor. A step fix now reaches both
+  review paths.
+
+## [0.8.4] (2026-11-13)
+
+### Fixed
+
+- Stop the Q11 resource-leak check from blocking released resources. An
+  argument to `ExitStack.enter_context`, `enter_async_context`, `push`, or
+  `push_async_exit` counts as released. An annotated assignment closed in a
+  `finally` block counts as released.
+- Warn and skip instead of crashing when `package.json` nests past the
+  parser limit or holds a dependency section that is not an object.
+- Treat `~~~` fences and long backtick fences as code in the policy and
+  prose checks. A fence closes only on its own character at equal or greater
+  length.
+
+### Changed
+
+- Drop two operands that could never change a result in the workflow path
+  test and the poetry pin check.
 
 ## [0.8.3] (2026-11-13)
 

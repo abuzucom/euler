@@ -29,6 +29,9 @@ DEPTH_PARAMETER_NAMES = frozenset({"limit", "max_depth", "remaining"})
 FILE_OPENERS = frozenset({"gzip", "bz2", "lzma", "tarfile", "io"})
 DB_MODULES = frozenset({"sqlite3", "psycopg2", "psycopg", "pymysql", "MySQLdb", "oracledb", "pyodbc", "duckdb"})
 RELEASE_METHODS = frozenset({"close", "release"})
+# ExitStack methods that take ownership of a context manager and release it on
+# exit. callback() is absent: it stores a callable and closes nothing.
+EXIT_STACK_METHODS = frozenset({"enter_context", "enter_async_context", "push", "push_async_exit"})
 MUTABLE_FACTORIES = frozenset({"list", "dict", "set", "defaultdict", "OrderedDict", "deque"})
 BROAD_EXCEPTIONS = frozenset({"Exception", "BaseException"})
 DEBUGGER_MODULES = frozenset({"pdb", "ipdb", "pudb"})
@@ -271,6 +274,8 @@ def resource_name(node: ast.Call, parent: ast.AST | None) -> str | None:
         return ast.unparse(node.func.value)
     if isinstance(parent, ast.Assign) and len(parent.targets) == 1:
         return ast.unparse(parent.targets[0])
+    if isinstance(parent, ast.AnnAssign):
+        return ast.unparse(parent.target)
     return None
 
 
@@ -280,6 +285,8 @@ def ownership_moves(parent: ast.AST | None) -> bool:
         return True
     if isinstance(parent, ast.Assign):
         return all(isinstance(target, ast.Attribute) for target in parent.targets)
+    if isinstance(parent, ast.Call) and isinstance(parent.func, ast.Attribute):
+        return parent.func.attr in EXIT_STACK_METHODS
     return False
 
 
