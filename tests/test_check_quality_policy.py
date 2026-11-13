@@ -152,6 +152,22 @@ class DashRuleTest(PolicyFixtureCase):
         path = self.write_policy("# AGENTS.md\n\nPlain prose.\n")
         self.assertEqual(policy.find_violations(path, prose_only=True), [])
 
+    def test_dash_inside_tilde_fence_passes(self) -> None:
+        text = "# Doc\n\n~~~\nrun --flag - value\n~~~\n"
+        self.assertEqual(policy.find_line_violations(text), [])
+
+    def test_shorter_backtick_line_stays_inside_longer_fence(self) -> None:
+        text = "# Doc\n\n````\n```\nrun --flag - value\n```\n````\n"
+        self.assertEqual(policy.find_line_violations(text), [])
+
+    def test_prose_after_tilde_fence_is_checked(self) -> None:
+        text = "# Doc\n\n~~~\ncode\n~~~\nThe build failed - the cache was stale.\n"
+        self.assertEqual(policy.find_line_violations(text), ["line 6 uses a prose dash"])
+
+    def test_tilde_line_does_not_close_backtick_fence(self) -> None:
+        text = "# Doc\n\n```\n~~~\nrun --flag - value\n```\n"
+        self.assertEqual(policy.find_line_violations(text), [])
+
 
 if __name__ == "__main__":
     unittest.main()
