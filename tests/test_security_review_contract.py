@@ -62,6 +62,11 @@ class SecurityReviewCallerTests(unittest.TestCase):
         self.assertRegex(self.caller, r'FOUCAULT_REF: "([0-9a-f]{40})"')
         self.assertRegex(self.caller, r"# Foucault v3\.\d+\.\d+\.")
 
+    def test_pin_names_the_minimax_release(self) -> None:
+        # v3.7.12 is the first foucault release that reviews on minimax-m3.1-flash.
+        self.assertIn("# Foucault v3.7.12.", self.caller)
+        self.assertIn('FOUCAULT_REF: "770ecbb4c52e50c554214c68245e16832a70e0be"', self.caller)
+
     def test_review_and_fork_jobs_delegate_to_the_reusable(self) -> None:
         for job_name in ("review", "fork-review"):
             job = extract_job(self.caller, job_name)
@@ -296,6 +301,20 @@ class SecurityReviewReusableTests(unittest.TestCase):
             'python3 .foucault/ci/run_model_command.py "$MODEL_CALL_COMMAND"',
             adapter,
         )
+
+    def test_head_fetch_alone_receives_the_token(self) -> None:
+        fetch = extract_step(self.reusable, "Fetch pull request objects")
+        self.assertIn("FETCH_TOKEN: ${{ github.token }}", fetch)
+        self.assertIn('token = fetch_environment.pop("FETCH_TOKEN", "")', fetch)
+        self.assertIn('if token and fetch_source == "origin":', fetch)
+        self.assertIn('"GIT_CONFIG_KEY_0": "http.https://github.com/.extraheader"', fetch)
+        self.assertIn('["git", "fetch", "--no-tags", fetch_source, head_sha]', fetch)
+        self.assertEqual(fetch.count("env=fetch_environment"), 1)
+
+    def test_token_never_reaches_the_argument_vector(self) -> None:
+        fetch = extract_step(self.reusable, "Fetch pull request objects")
+        self.assertNotIn("$FETCH_TOKEN", fetch)
+        self.assertNotIn("GIT_CONFIG_VALUE_0=", fetch)
 
     def test_no_api_derived_ref_is_checked_out(self) -> None:
         checkout = extract_step(self.reusable, "Checkout the trusted review repository")

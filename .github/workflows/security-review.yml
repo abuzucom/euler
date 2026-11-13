@@ -254,9 +254,13 @@ jobs:
           BASE_REPOSITORY: ${{ github.repository }}
           BASE_SHA: ${{ steps.resolve.outputs.base_sha }}
           HEAD_SHA: ${{ steps.resolve.outputs.head_sha }}
+          # The checkout persists no credential. A private caller needs one
+          # to fetch its own head. Only this step receives the token.
+          FETCH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           python3 - "$PR_HEAD_REPO_URL" "$HEAD_REPO_FULL_NAME" "$BASE_REPOSITORY" "$BASE_SHA" "$HEAD_SHA" <<'PY'
+          import base64
           import os
           import re
           import subprocess
@@ -297,9 +301,24 @@ jobs:
           # Full history lets the case builder diff from the merge base. The
           # base checkout already holds every base commit, so only commits
           # missing from it transfer.
+          fetch_environment = dict(os.environ)
+          token = fetch_environment.pop("FETCH_TOKEN", "")
+          if token and fetch_source == "origin":
+              # The header reaches this one fetch through the environment.
+              # Git config and the argument vector never hold the token. A
+              # fork URL fetch receives no credential.
+              credential = base64.b64encode(
+                  f"x-access-token:{token}".encode("utf-8")
+              ).decode("ascii")
+              fetch_environment.update({
+                  "GIT_CONFIG_COUNT": "1",
+                  "GIT_CONFIG_KEY_0": "http.https://github.com/.extraheader",
+                  "GIT_CONFIG_VALUE_0": f"AUTHORIZATION: basic {credential}",
+              })
           subprocess.run(
               ["git", "fetch", "--no-tags", fetch_source, head_sha],
               check=True,
+              env=fetch_environment,
           )
           PY
 

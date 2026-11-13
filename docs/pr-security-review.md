@@ -9,8 +9,8 @@ The two reviews publish separate check runs.
 
 ## Pin
 
-The workflow pins foucault v3.7.1 at commit
-`ae8a60036681ce8e865eee256fc685585c3f290d`. The workflow-level `FOUCAULT_REF`
+The workflow pins foucault v3.7.12 at commit
+`770ecbb4c52e50c554214c68245e16832a70e0be`. The workflow-level `FOUCAULT_REF`
 variable holds the pin. The `resolve-pr` job republishes it as the `audit_ref`
 output for the reusable-workflow calls. The workflow loads `AUDIT.md` and the
 foucault adapter from that one commit. A verify step re-reads the checked-out
@@ -116,6 +116,12 @@ review when the first run already finished.
   level.
 - The file follows the repository yamllint rules. It quotes the `on` key and
   wraps long expressions.
+- The compliance runner and `scripts/check_compliance_tree.py` trust
+  `actions/checkout` v7.0.1 and `actions/setup-python` v7.1.0. Upstream
+  v3.7.12 still trusts checkout v4.4.0. A pin refresh keeps the euler pins.
+- `scripts/check_compliance_tree.py` keeps the `process.stdout is None`
+  guard that upstream dropped. mypy over `scripts/` types the stream as
+  optional.
 
 ## Fork review
 
@@ -153,7 +159,8 @@ default-branch code and scans pull request object trees as data only.
 
 ## Secret
 
-The active foucault provider profile is Ollama with `kimi-k2.7-code`. Set the
+The active foucault provider profile is `ollama-large`. That profile runs
+Ollama with `minimax-m3.1-flash`. Set the
 `OLLAMA_API_KEY` repository secret for the same-repository review. Without
 it, every review fails before a verdict. The protected fork path reads the
 `fork-review` environment secret.

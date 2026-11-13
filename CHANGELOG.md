@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.8.7] (2026-11-13)
+
+### Changed
+
+- Updated the foucault integration pin to v3.7.12. The security review now
+  runs `minimax-m3.1-flash`. `kimi-k2.7-code` broke the report format
+  contract on every euler review.
+- Ported the upstream head fetch credential into `security-review.yml`. The
+  same-repository head fetch receives `github.token` through its environment
+  alone.
+- Ported the upstream `check_compliance_tree.py` changes. The scanner drops
+  relative `PATH` entries and takes its process directory from
+  `tempfile.gettempdir()`. Named constants replace the encoding thresholds and
+  the trusted step schema numbers. The euler v7 action pins and the stdout
+  guard stay as documented deviations.
+
 ## [0.8.6] (2026-11-13)
 
 ### Changed

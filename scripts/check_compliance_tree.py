@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from types import ModuleType
@@ -41,6 +42,18 @@ CODE_SUFFIXES = {
     ".tsx",
 }
 EVALUATION_FIXTURE_PREFIX = "eval/cases/"
+# BOM-less UTF-16 and UTF-32 detection. In ASCII-range text the high-order
+# byte positions of each code unit are mostly NUL and the low-order position
+# is mostly not.
+UTF32_NUL_RATIO_MIN = 0.6
+UTF16_NUL_RATIO_MIN = 0.4
+CODE_UNIT_NUL_RATIO_MAX = 0.2
+# The promoted immutable-compliance job: two checkouts, Python setup,
+# dependency install, and the trusted scan. The checkouts fetch the
+# commit-range history the metadata checks read.
+TRUSTED_STEP_COUNT = 5
+PYTHON_SETUP_STEP_INDEX = 2
+TRUSTED_FETCH_DEPTH = 201
 # The workflow installs with --require-hashes. The checker accepts only the
 # hashed command, so a pull request cannot downgrade to an unverified
 # install.
@@ -131,14 +144,23 @@ def _is_within(path: Path, parent: Path) -> bool:
         return False
 
 
+# The scanner runs without trusted_git.py, so it keeps its own copies of the
+# PATH and directory helpers.
 def _safe_search_path(repo: Path) -> str:
-    """Return PATH without directories controlled by the candidate repo."""
+    """Return PATH without empty, relative, or candidate-controlled entries.
+
+    A relative entry resolves against the working directory, which a
+    candidate tree can control.
+    """
     safe_entries = []
     for raw_entry in os.environ.get("PATH", "").split(os.pathsep):
         if not raw_entry:
             continue
+        directory = Path(raw_entry.strip('"'))
+        if not directory.is_absolute():
+            continue
         try:
-            entry = Path(raw_entry).resolve(strict=False)
+            entry = directory.resolve(strict=False)
         except OSError:
             continue
         if not _is_within(entry, repo):
@@ -147,10 +169,13 @@ def _safe_search_path(repo: Path) -> str:
 
 
 def _safe_execution_directory(repo: Path, executable: str) -> Path:
-    """Return an existing process directory outside the candidate repo."""
-    for candidate in (Path(os.getenv("TEMP", "")), Path(executable).parent):
-        if not str(candidate):
-            continue
+    """Return an existing process directory outside the candidate repo.
+
+    Every candidate passes the same repository test. tempfile.gettempdir()
+    can fall back to the working directory. That directory may sit inside
+    the candidate repo and gets no exemption.
+    """
+    for candidate in (Path(tempfile.gettempdir()), Path(executable).parent):
         try:
             resolved = candidate.resolve(strict=True)
         except OSError:
@@ -247,6 +272,7 @@ def _capture_bounded(
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
+    # Euler keeps this guard. mypy over scripts/ types stdout as optional.
     if process.stdout is None:
         _stop_process(process)
         raise RuntimeError("could not capture Git output")
@@ -416,16 +442,16 @@ def _decode_bomless_unicode(content: bytes) -> str | None:
     candidates = []
     if len(content) % 4 == 0 and len(content) >= 4:
         ratios = [_zero_ratio(content, offset, 4) for offset in range(4)]
-        if min(ratios[1:]) > 0.6 and ratios[0] < 0.2:
+        if min(ratios[1:]) > UTF32_NUL_RATIO_MIN and ratios[0] < CODE_UNIT_NUL_RATIO_MAX:
             candidates.append("utf-32-le")
-        if min(ratios[:3]) > 0.6 and ratios[3] < 0.2:
+        if min(ratios[:3]) > UTF32_NUL_RATIO_MIN and ratios[3] < CODE_UNIT_NUL_RATIO_MAX:
             candidates.append("utf-32-be")
     if len(content) % 2 == 0 and len(content) >= 2:
         even = _zero_ratio(content, 0, 2)
         odd = _zero_ratio(content, 1, 2)
-        if odd > 0.4 and even < 0.2:
+        if odd > UTF16_NUL_RATIO_MIN and even < CODE_UNIT_NUL_RATIO_MAX:
             candidates.append("utf-16-le")
-        if even > 0.4 and odd < 0.2:
+        if even > UTF16_NUL_RATIO_MIN and odd < CODE_UNIT_NUL_RATIO_MAX:
             candidates.append("utf-16-be")
     for encoding in candidates:
         try:
@@ -489,7 +515,7 @@ def _checkout_step(base: bool) -> dict:
             "ref": f"${{{{ env.PR_{prefix}_SHA }}}}",
             "path": "trusted-base" if base else "pr-head",
             "persist-credentials": False,
-            "fetch-depth": 201,
+            "fetch-depth": TRUSTED_FETCH_DEPTH,
         },
     }
 
@@ -525,8 +551,9 @@ def _trusted_jobs(version_text: str) -> list[dict]:
         variants = [_trusted_steps(command)]
         if version_text:
             pinned_steps = _trusted_steps(command)
-            pinned_steps[2] = dict(pinned_steps[2])
-            pinned_steps[2]["with"] = {"python-version": version_text}
+            python_step = dict(pinned_steps[PYTHON_SETUP_STEP_INDEX])
+            python_step["with"] = {"python-version": version_text}
+            pinned_steps[PYTHON_SETUP_STEP_INDEX] = python_step
             variants.append(pinned_steps)
         for steps in variants:
             jobs.append({
@@ -546,8 +573,8 @@ def _normalized_candidate_jobs(raw_jobs: object) -> tuple[dict, str]:
     if isinstance(candidate_job, dict):
         candidate_job = dict(candidate_job)
         candidate_steps = candidate_job.get("steps")
-        if isinstance(candidate_steps, list) and len(candidate_steps) == 5:
-            python_step = candidate_steps[2]
+        if isinstance(candidate_steps, list) and len(candidate_steps) == TRUSTED_STEP_COUNT:
+            python_step = candidate_steps[PYTHON_SETUP_STEP_INDEX]
             version = python_step.get("with", {}).get("python-version") if isinstance(python_step, dict) else None
             candidate_version = str(version) if isinstance(version, (str, float, int)) else ""
             if PYTHON_VERSION_PATTERN.fullmatch(candidate_version):
@@ -555,7 +582,7 @@ def _normalized_candidate_jobs(raw_jobs: object) -> tuple[dict, str]:
                 candidate_steps = list(candidate_steps)
                 python_step = dict(python_step)
                 python_step["with"] = {"python-version": version_text}
-                candidate_steps[2] = python_step
+                candidate_steps[PYTHON_SETUP_STEP_INDEX] = python_step
                 candidate_job["steps"] = candidate_steps
     candidate_jobs = dict(raw_jobs) if isinstance(raw_jobs, dict) else {}
     if isinstance(candidate_job, dict):

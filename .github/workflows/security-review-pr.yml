@@ -32,8 +32,8 @@ permissions:
   contents: read
 
 env:
-  # Foucault v3.7.1.
-  FOUCAULT_REF: "ae8a60036681ce8e865eee256fc685585c3f290d"
+  # Foucault v3.7.12.
+  FOUCAULT_REF: "770ecbb4c52e50c554214c68245e16832a70e0be"
 
 jobs:
   resolve-pr:
