@@ -93,6 +93,11 @@ def load_json(path: Path) -> dict:
     except json.JSONDecodeError as error:
         sys.stderr.write(f"warning: skipped {path}: {error}. Fix the JSON syntax to check it.\n")
         return {}
+    except PARSER_LIMIT_ERRORS as error:
+        # remove_parser_limit_files screens only Python and TOML, so deep JSON
+        # reaches this parser in the checker process.
+        sys.stderr.write(f"warning: skipped {path}: {type(error).__name__}. Reduce the nesting to check it.\n")
+        return {}
     return data if isinstance(data, dict) else {}
 
 
@@ -106,7 +111,11 @@ def unpinned_package_json(relative: str, path: Path) -> list[Finding]:
     data = load_json(path)
     findings = []
     for section in PACKAGE_JSON_SECTIONS:
-        for name, raw_spec in (data.get(section) or {}).items():
+        entries = data.get(section) or {}
+        if not isinstance(entries, dict):
+            sys.stderr.write(f"warning: skipped {relative} {section}: expected an object of package specs.\n")
+            continue
+        for name, raw_spec in entries.items():
             spec = str(raw_spec)
             pinned_git = "#" in spec and FULL_SHA.match(spec.rsplit("#", 1)[1])
             if EXACT_SEMVER.match(spec) or pinned_git or spec.startswith(LOCAL_SPEC_PREFIXES):
@@ -148,7 +157,7 @@ def unpinned_poetry(relative: str, poetry: dict) -> list[Finding]:
         if name == "python" or (isinstance(spec, dict) and ("path" in spec or "rev" in spec)):
             continue
         version = spec.get("version", "") if isinstance(spec, dict) else str(spec)
-        if not EXACT_SEMVER.match(version.lstrip("=")) or version.startswith(("^", "~")):
+        if not EXACT_SEMVER.match(version.lstrip("=")):
             findings.append(Finding(relative, 1, "D1", f"'{name}' uses unpinned spec '{version}'", False))
     return findings
 

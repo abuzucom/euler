@@ -35,6 +35,8 @@ TIERED_HEADING = re.compile(r"^### (?P<id>[QMCD]\d+) (?P<name>[^()]+) \((?P<tier
 HEADING = re.compile(r"^#{2,3} .+$", re.MULTILINE)
 CODE_SPAN = re.compile(r"`[^`]*`")
 BULLET_PREFIX = "- "
+# A fence is a run of at least three backticks or three tildes (CommonMark).
+FENCE_MARKER = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})(?P<rest>.*)$")
 PROSE_DASH = re.compile(r"\s--?-?\s|\s--?-?$")
 
 
@@ -101,15 +103,38 @@ def is_exempt_line(line: str) -> bool:
     return stripped.startswith(("|", "<!--")) or stripped.endswith("-->")
 
 
+class FenceTracker:
+    """Track fenced code blocks one line at a time.
+
+    A fence closes only on the opening character at equal or greater length
+    with nothing after it. A shorter or different marker inside stays code.
+    """
+
+    def __init__(self) -> None:
+        self.open_marker = ""
+
+    def is_code(self, line: str) -> bool:
+        """Consume one line and return True for fence lines and fenced content."""
+        match = FENCE_MARKER.match(line)
+        if not self.open_marker:
+            if match:
+                self.open_marker = match["marker"]
+            return match is not None
+        if match is None:
+            return True
+        marker = match["marker"]
+        closes = marker[0] == self.open_marker[0] and len(marker) >= len(self.open_marker)
+        if closes and not match["rest"].strip():
+            self.open_marker = ""
+        return True
+
+
 def find_line_violations(text: str) -> list[str]:
     """Return prose width and prose dash violations outside fences."""
     violations: list[str] = []
-    in_fence = False
+    fences = FenceTracker()
     for line_number, line in enumerate(text.splitlines(), 1):
-        if line.strip().startswith("```"):
-            in_fence = not in_fence
-            continue
-        if in_fence or is_exempt_line(line):
+        if fences.is_code(line) or is_exempt_line(line):
             continue
         if len(line) > MAX_PROSE_WIDTH and not line.startswith(LONG_LINE_PREFIXES):
             violations.append(f"line {line_number} exceeds {MAX_PROSE_WIDTH} characters")
