@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.8.1] (2026-11-13)
+
+### Fixed
+
+- Pass the foucault pin to the reusable security review through a
+  `resolve-pr` job output. GitHub rejects the `env` context in a
+  reusable-workflow `with:` block. The rejection failed every security review
+  run since 0.8.0.
+
 ## [0.8.0] (2026-11-09)
 
 ### Added

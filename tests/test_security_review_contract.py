@@ -35,6 +35,22 @@ def extract_job(workflow: str, job_name: str) -> str:
     return "\n".join(lines[job_index:end])
 
 
+def extract_job_block(job: str, key: str) -> str:
+    """Return one job-level mapping, such as with: or outputs:, from a job block."""
+    lines = job.splitlines()
+    marker = f"    {key}"
+    if marker not in lines:
+        return ""
+    start = lines.index(marker)
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        line = lines[index]
+        if line.strip() and len(line) - len(line.lstrip()) <= len(marker) - len(key):
+            end = index
+            break
+    return "\n".join(lines[start:end])
+
+
 class SecurityReviewCallerTests(unittest.TestCase):
     """Verify the caller's pin, gates, and delegation to the reusable file."""
 
@@ -50,12 +66,27 @@ class SecurityReviewCallerTests(unittest.TestCase):
         for job_name in ("review", "fork-review"):
             job = extract_job(self.caller, job_name)
             self.assertIn("uses: ./.github/workflows/security-review.yml", job)
-            self.assertIn("audit_ref: ${{ env.FOUCAULT_REF }}", job)
+            self.assertIn("audit_ref: ${{ needs.resolve-pr.outputs.audit_ref }}", job)
             self.assertIn("MODEL_API_KEY: ${{ secrets.OLLAMA_API_KEY }}", job)
             self.assertIn("pr_comment: true", job)
             self.assertIn("fail_on_block: true", job)
         fork_job = extract_job(self.caller, "fork-review")
         self.assertIn("fork_review: true", fork_job)
+
+    def test_reusable_call_inputs_avoid_the_env_context(self) -> None:
+        # GitHub rejects the whole workflow file when jobs.<id>.with reads env.
+        for job_name in ("review", "fork-review"):
+            with_block = extract_job_block(extract_job(self.caller, job_name), "with:")
+            self.assertTrue(with_block, f"{job_name} has no with: block")
+            self.assertNotIn("${{ env.", with_block)
+
+    def test_resolve_job_publishes_the_audit_ref_from_a_step(self) -> None:
+        resolve = extract_job(self.caller, "resolve-pr")
+        outputs = extract_job_block(resolve, "outputs:")
+        self.assertIn("audit_ref: ${{ steps.audit-ref.outputs.audit_ref }}", outputs)
+        audit_step = extract_step(self.caller, "Publish the pinned audit ref")
+        self.assertIn("id: audit-ref", audit_step)
+        self.assertIn('echo "audit_ref=$FOUCAULT_REF" >> "$GITHUB_OUTPUT"', audit_step)
 
     def test_fork_review_requires_the_label(self) -> None:
         self.assertIn('"safe-to-review"', self.caller)

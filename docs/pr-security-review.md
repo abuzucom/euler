@@ -10,10 +10,11 @@ The two reviews publish separate check runs.
 ## Pin
 
 The workflow pins foucault v3.7.1 at commit
-`ae8a60036681ce8e865eee256fc685585c3f290d`. The `FOUCAULT_REF` job variable
-holds the pin. The workflow loads `AUDIT.md` and the foucault adapter from that
-one commit. A verify step re-reads the checked-out revision and rejects a
-mismatch with the pin.
+`ae8a60036681ce8e865eee256fc685585c3f290d`. The workflow-level `FOUCAULT_REF`
+variable holds the pin. The `resolve-pr` job republishes it as the `audit_ref`
+output for the reusable-workflow calls. The workflow loads `AUDIT.md` and the
+foucault adapter from that one commit. A verify step re-reads the checked-out
+revision and rejects a mismatch with the pin.
 
 ## Wiring
 
