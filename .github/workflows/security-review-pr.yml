@@ -53,7 +53,14 @@ jobs:
       head_sha: ${{ steps.resolve.outputs.head_sha }}
       head_repo_url: ${{ steps.resolve.outputs.head_repo_url }}
       head_repo_full_name: ${{ steps.resolve.outputs.head_repo_full_name }}
+      audit_ref: ${{ steps.audit-ref.outputs.audit_ref }}
     steps:
+      # A reusable-workflow call cannot read the env context in its with:
+      # inputs. This step republishes the pin as a job output for both callers.
+      - name: Publish the pinned audit ref
+        id: audit-ref
+        run: echo "audit_ref=$FOUCAULT_REF" >> "$GITHUB_OUTPUT"
+
       - name: Resolve pull request from workflow run head
         id: resolve
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
@@ -222,7 +229,7 @@ jobs:
       && needs.resolve-pr.outputs.already_reviewed != 'true'
     uses: ./.github/workflows/security-review.yml
     with:
-      audit_ref: ${{ env.FOUCAULT_REF }}
+      audit_ref: ${{ needs.resolve-pr.outputs.audit_ref }}
       model_call_command: "python3 ci/call_model.py"
       pr_comment: true
       fail_on_block: true
@@ -244,7 +251,7 @@ jobs:
       && needs.resolve-pr.outputs.already_reviewed != 'true'
     uses: ./.github/workflows/security-review.yml
     with:
-      audit_ref: ${{ env.FOUCAULT_REF }}
+      audit_ref: ${{ needs.resolve-pr.outputs.audit_ref }}
       model_call_command: "python3 ci/call_model.py"
       pr_comment: true
       fail_on_block: true
