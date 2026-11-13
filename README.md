@@ -149,7 +149,7 @@ for the event flow, the trust boundary, and adoption steps.
 
 [`security-review-pr.yml`](.github/workflows/security-review-pr.yml) runs the
 `abuzucom/foucault` security review on this repository's pull requests. The
-workflow pins foucault v3.3.14 and runs its adapter from a pinned checkout.
+workflow pins foucault v3.7.12 and runs its adapter from a pinned checkout.
 The caller maps the `OLLAMA_API_KEY` secret to `MODEL_API_KEY`. See
 [`docs/pr-security-review.md`](docs/pr-security-review.md) for the wiring,
 the trust boundary, and upgrade steps.
