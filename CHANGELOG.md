@@ -6,6 +6,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.8.3] (2026-11-13)
+
+### Fixed
+
+- Grant the reusable review jobs their permissions from the caller jobs.
+  A called workflow can only narrow its caller's grants. The security review
+  caller granted only `contents: read`, and the quality review caller lacked
+  `actions: read`. GitHub refused both runs at startup.
+- Document the caller job permissions for quality review adopters.
+
+### Added
+
+- A contract test that checks every local reusable-workflow caller grants
+  the permissions its called jobs request.
+
 ## [0.8.2] (2026-11-13)
 
 ### Fixed

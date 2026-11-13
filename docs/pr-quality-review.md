@@ -125,11 +125,17 @@ Call `quality-review.yml` as a reusable workflow. Pin `uses:` and
 the caller. The adopter supplies these items:
 
 - a caller workflow
+- caller job permissions `contents: read`, `actions: read`,
+  `pull-requests: write`, and `checks: write`
 - a provider API key mapped to `MODEL_API_KEY`
 - `fork_review: true` for fork pull requests that require environment approval
 - a `fork-review` environment with protection rules
 - optionally, a `MODEL_API_KEY` environment secret for the protected path
 - an `adopters/<repo>.md` record per `adopters/README.md`
+
+A called workflow can only narrow the permissions its caller job grants.
+GitHub refuses to start the run when the caller grants less than the review
+jobs request.
 
 Same-repository callers can omit `fork_review` and map the repository or
 organization `OLLAMA_API_KEY` secret to `MODEL_API_KEY`. Fork callers can use
