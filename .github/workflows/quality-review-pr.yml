@@ -57,8 +57,11 @@ jobs:
 
   review:
     needs: resolve
+    # A called workflow can only narrow these grants. The reusable review job
+    # requests each one, including actions: read for its review artifact.
     permissions:
       contents: read
+      actions: read
       pull-requests: write
       checks: write
     if: needs.resolve.outputs.found == 'true' && needs.resolve.outputs.same_repo == 'true'

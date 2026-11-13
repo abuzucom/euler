@@ -227,6 +227,12 @@ jobs:
       needs.resolve-pr.result == 'success'
       && needs.resolve-pr.outputs.same_repository == 'true'
       && needs.resolve-pr.outputs.already_reviewed != 'true'
+    # A called workflow can only narrow these grants. The reusable review job
+    # requests each one.
+    permissions:
+      checks: write
+      contents: read
+      pull-requests: write
     uses: ./.github/workflows/security-review.yml
     with:
       audit_ref: ${{ needs.resolve-pr.outputs.audit_ref }}
@@ -249,6 +255,10 @@ jobs:
       && needs.resolve-pr.outputs.fork_review_approved == 'true'
       && needs.resolve-pr.outputs.compliance_passed == 'true'
       && needs.resolve-pr.outputs.already_reviewed != 'true'
+    permissions:
+      checks: write
+      contents: read
+      pull-requests: write
     uses: ./.github/workflows/security-review.yml
     with:
       audit_ref: ${{ needs.resolve-pr.outputs.audit_ref }}
