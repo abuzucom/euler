@@ -167,7 +167,7 @@ class ComplianceWorkflowTests(unittest.TestCase):
         base = extract_step(self.compliance, "Check out the exact trusted base")
         head = extract_step(self.compliance, "Check out the exact pull request head")
         for block in (base, head):
-            self.assertIn("actions/checkout@11d5960a326750d5838078e36cf38b85af677262", block)
+            self.assertIn("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", block)
             self.assertIn("persist-credentials: false", block)
             self.assertIn("fetch-depth: 201", block)
         self.assertIn("trusted-base", base)
