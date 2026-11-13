@@ -43,10 +43,17 @@ def extract_step(job: list[str], name: str) -> list[str]:
     return step
 
 
-def normalize_fork_job(job: list[str]) -> list[str]:
-    """Return only the shared model review implementation steps."""
-    start = job.index("      - name: Validate model API key")
-    return [line for line in job[start:] if line.strip()]
+STEPS_ANCHOR = "quality_review_steps"
+
+
+def resolve_job(workflow: str, job_name: str) -> list[str]:
+    """Return one job block with an aliased steps list expanded from its anchor."""
+    job = extract_block(workflow, f"{job_name}:", 2)
+    alias = f"    steps: *{STEPS_ANCHOR}"
+    if alias not in job:
+        return job
+    anchored_steps = extract_block(workflow, f"steps: &{STEPS_ANCHOR}", 4)
+    return [line for line in job if line != alias] + ["    steps:"] + anchored_steps[1:]
 
 
 class QualityReviewWorkflowContractTests(unittest.TestCase):
@@ -71,7 +78,7 @@ class QualityReviewWorkflowContractTests(unittest.TestCase):
         environment_lines = [line for line in self.workflow.splitlines() if line.strip().startswith("environment:")]
         self.assertEqual(environment_lines, ["    environment: fork-review"])
 
-        fork_job = extract_block(self.workflow, "fork-review:", 2)
+        fork_job = resolve_job(self.workflow, "fork-review")
         self.assertIn("    if: ${{ inputs.fork_review == true }}", fork_job)
         self.assertIn("    environment: fork-review", fork_job)
         self.assertLess(
@@ -104,7 +111,7 @@ class QualityReviewWorkflowContractTests(unittest.TestCase):
         )
 
         for job_name in ("review", "fork-review"):
-            job = extract_block(self.workflow, f"{job_name}:", 2)
+            job = resolve_job(self.workflow, job_name)
             self.assertIn("    needs: prepare-review", job)
             checkout = extract_step(job, "Checkout euler policy and adapter")
             self.assertIn(
@@ -131,7 +138,7 @@ class QualityReviewWorkflowContractTests(unittest.TestCase):
         self.assertIn("required: false", "\n".join(secret))
 
         for job_name in ("review", "fork-review"):
-            job = extract_block(self.workflow, f"{job_name}:", 2)
+            job = resolve_job(self.workflow, job_name)
             validation = extract_step(job, "Validate model API key")
             model_review = extract_step(job, "Run model review")
             self.assertLess(job.index(validation[0]), job.index(model_review[0]))
@@ -165,7 +172,7 @@ class QualityReviewWorkflowContractTests(unittest.TestCase):
 
     def test_execution_jobs_consume_prep_artifact_without_fetching_pr_commits(self) -> None:
         for job_name in ("review", "fork-review"):
-            job = extract_block(self.workflow, f"{job_name}:", 2)
+            job = resolve_job(self.workflow, job_name)
             self.assertIn("    needs: prepare-review", job)
             self.assertIn("      actions: read", job)
             self.assertNotIn("      - name: Fetch review commits", job)
@@ -179,9 +186,13 @@ class QualityReviewWorkflowContractTests(unittest.TestCase):
             self.assertLess(job.index(extract[-1]), job.index(validate[0]))
 
     def test_both_paths_run_the_same_review_implementation(self) -> None:
+        # One anchored step list serves both jobs. A fix to a step reaches both paths.
         review = extract_block(self.workflow, "review:", 2)
         fork_job = extract_block(self.workflow, "fork-review:", 2)
-        self.assertEqual(normalize_fork_job(review), normalize_fork_job(fork_job))
+        self.assertIn(f"    steps: &{STEPS_ANCHOR}", review)
+        self.assertIn(f"    steps: *{STEPS_ANCHOR}", fork_job)
+        self.assertFalse([line for line in fork_job if line.startswith("      - name:")])
+        self.assertEqual(self.workflow.count(f"*{STEPS_ANCHOR}"), 1)
 
     def test_existing_caller_keeps_its_secret_alias_and_default_input(self) -> None:
         self.assertNotIn("fork_review:", self.caller)

@@ -114,7 +114,8 @@ Other workflows cover the time between pull requests:
   pushes to `main`, and a weekly schedule.
 - `scheduled-validation.yml` runs `make check` weekly and on manual dispatch.
 - `.github/dependabot.yml` opens weekly update PRs for the pinned actions and
-  lint tools.
+  lint tools. It skips `immutable-conflict-check.yml` and
+  `requirements-checkers.txt`, which refresh from the foucault pin.
 
 `scripts/check_quality_policy.py` validates `QUALITY.md`. The checker enforces
 these properties:

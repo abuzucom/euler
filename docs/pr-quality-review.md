@@ -22,7 +22,9 @@ a report with a machine-readable verdict. The check fails on `BLOCK` or
    review envelopes without receiving the model key or executing PR files.
 7. The selected model job downloads the review artifact. The fork model job
    waits for the adopter's `fork-review` environment protection rules before
-   any job step runs. Both model jobs validate `MODEL_API_KEY` before a model
+   any job step runs. Both model jobs run one step list. The `review` job
+   defines it as the `quality_review_steps` YAML anchor, and `fork-review`
+   reuses it by alias. Both model jobs validate `MODEL_API_KEY` before a model
    request. PR files remain data and never run as code.
 8. The caller maps its accessible `OLLAMA_API_KEY` secret to `MODEL_API_KEY`.
    An adopter can instead configure `MODEL_API_KEY` in the environment.

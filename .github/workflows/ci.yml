@@ -43,16 +43,23 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        # The base branch tip can carry QUALITY.md and eval/cases changes the
+        # pull request never saw. The merge base shows only this change.
         run: |
+          merge_base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+          if [[ -z "$merge_base" ]]; then
+            echo "::error::No merge base between the base and head commits. Fetch the full history."
+            exit 1
+          fi
           base_policy="$RUNNER_TEMP/base-quality.md"
           head_policy="$RUNNER_TEMP/head-quality.md"
-          if git cat-file -e "$BASE_SHA:QUALITY.md" 2>/dev/null; then
-            git show "$BASE_SHA:QUALITY.md" > "$base_policy"
+          if git cat-file -e "$merge_base:QUALITY.md" 2>/dev/null; then
+            git show "$merge_base:QUALITY.md" > "$base_policy"
           else
             : > "$base_policy"
           fi
           git show "$HEAD_SHA:QUALITY.md" > "$head_policy"
-          git diff --name-only "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/changed.txt"
+          git diff --name-only "$merge_base" "$HEAD_SHA" > "$RUNNER_TEMP/changed.txt"
           python3 scripts/quality_diff_report.py "$base_policy" "$head_policy" \
             --changed-files "$RUNNER_TEMP/changed.txt" | tee -a "$GITHUB_STEP_SUMMARY"
 
