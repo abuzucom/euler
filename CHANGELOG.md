@@ -13,10 +13,26 @@ loading `QUALITY.md` into a deployment.
 - Switched the quality review model to `minimax-m3.1-flash`. The foucault
   security review already runs it, and its reports passed the format
   validator on the first attempt.
-- Raised the per-call review budget in `ci/build_pr_case.py` from 120,000 to
-  2,000,000 patch characters. Most pull requests now take one model call, so
-  the reviewer sees every changed file together. Larger pull requests still
-  split into chunks.
+- Replaced the 120,000-character chunk budget in `ci/build_pr_case.py` with a
+  byte budget derived from the model context. The builder counts escaped
+  UTF-8 bytes. One byte bounds one token for a byte-level BPE tokenizer. The
+  budget reserves the reply, `QUALITY.md`, the chat template, the retry note,
+  the PR text, the paths, and the prescan items. One envelope holds up to
+  857,216 bytes. Most pull requests now take one model call. The reviewer
+  sees every changed file together. Larger pull requests still split into
+  chunks.
+
+### Added
+
+- Added `--max-bytes` to `ci/build_pr_case.py`. `--max-chars` keeps its
+  character budget.
+- Capped the retry note in `ci/run_review.py` at 50 problems of 300
+  characters each, with control characters replaced.
+
+### Removed
+
+- Removed the `DEFAULT_MAX_CHARS` constant. `BuildOptions.max_chars` now
+  defaults to `None`, which selects the derived byte budget.
 
 ## [0.8.7] (2026-11-13)
 

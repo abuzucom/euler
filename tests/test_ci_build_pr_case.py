@@ -133,16 +133,69 @@ class BuildTest(GitRepoCase):
         self.assertEqual(len(manifest["chunks"]), 2)
 
     def test_default_budget_reviews_a_large_pr_in_one_chunk(self) -> None:
-        patches = {f"file{index}.py": "+" + "x" * 499_999 for index in range(3)}
-        chunks, oversized = build_pr_case.pack_chunks(patches, build_pr_case.DEFAULT_MAX_CHARS)
+        patches = {f"file{index}.py": "+" + "x" * 249_999 for index in range(3)}
+        chunks, oversized = build_pr_case.pack_chunks(
+            patches, build_pr_case.MAX_ENVELOPE_BYTES, measure=build_pr_case.escaped_size
+        )
         self.assertEqual(chunks, [sorted(patches)])
         self.assertEqual(oversized, [])
 
     def test_default_budget_still_flags_a_patch_above_it(self) -> None:
-        patches = {"huge.py": "+" + "x" * 2_099_999}
-        chunks, oversized = build_pr_case.pack_chunks(patches, build_pr_case.DEFAULT_MAX_CHARS)
+        patches = {"huge.py": "+" + "x" * 899_999}
+        chunks, oversized = build_pr_case.pack_chunks(
+            patches, build_pr_case.MAX_ENVELOPE_BYTES, measure=build_pr_case.escaped_size
+        )
         self.assertEqual(chunks, [])
         self.assertEqual(oversized, ["huge.py"])
+
+    def test_escaped_size_counts_json_escapes_and_utf8_bytes(self) -> None:
+        self.assertEqual(build_pr_case.escaped_size("ab"), 2)
+        self.assertEqual(build_pr_case.escaped_size('"\\\n'), 6)
+        self.assertEqual(build_pr_case.escaped_size("\x01"), 6)
+        self.assertEqual(build_pr_case.escaped_size("中"), 3)
+        self.assertEqual(build_pr_case.escaped_size("\U0001f600"), 4)
+
+    def test_default_budget_keeps_dense_envelopes_under_the_context(self) -> None:
+        # Each fixture escapes to about 400,000 bytes. Character counts stay far lower.
+        dense = {
+            "code.txt": "def handler(event):\n    return {'key': event['value']}\n" * 7_400,
+            "cjk.txt": ("中文测试" * 25 + "\n") * 1_320,
+            "emoji.txt": ("\U0001f600\U0001f680" * 50 + "\n") * 1_000,
+            "escapes.txt": ('\x01"\\\t' * 25 + "\n") * 1_100,
+        }
+        base = self.commit({"a.txt": "x\n"})
+        head = self.commit(dense)
+        out_dir = self.build(base, head)
+        manifest = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["unreviewed"], [])
+        self.assertGreater(len(manifest["chunks"]), 1)
+        for chunk in manifest["chunks"]:
+            envelope_bytes = (out_dir / "envelopes" / chunk["envelope"]).read_bytes()
+            self.assertLessEqual(len(envelope_bytes), build_pr_case.MAX_ENVELOPE_BYTES)
+
+    def test_default_budget_flags_a_dense_patch_with_few_characters(self) -> None:
+        # 200,000 control characters escape to 1,200,000 bytes.
+        base = self.commit({"a.txt": "x\n"})
+        head = self.commit({"control.txt": ("\x01" * 99 + "\n") * 2_000})
+        manifest = json.loads((self.build(base, head) / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["unreviewed"], ["control.txt"])
+
+    def test_explicit_byte_budget_counts_escaped_bytes(self) -> None:
+        base = self.commit({"a.txt": "x\n"})
+        head = self.commit({"one.txt": "\x01\n" * 40, "two.txt": "\x01\n" * 40})
+        manifest = json.loads((self.build(base, head, max_bytes=500) / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(manifest["chunks"]), 2)
+
+    def test_character_and_byte_budgets_together_rejected(self) -> None:
+        base = self.commit({"a.txt": "x\n"})
+        head = self.commit({"b.txt": "y\n"})
+        with self.assertRaises(ValueError):
+            self.build(base, head, max_chars=400, max_bytes=400)
+
+    def test_reply_reserve_matches_the_active_profile(self) -> None:
+        data = json.loads((REPO_ROOT / "ci" / "model_providers.json").read_text(encoding="utf-8"))
+        profile = data["providers"][data["active_provider"]]
+        self.assertEqual(build_pr_case.REPLY_TOKENS, profile["max_output_tokens"])
 
     def test_oversized_single_file_unreviewed(self) -> None:
         base = self.commit({"a.txt": "x\n"})
