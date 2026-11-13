@@ -30,7 +30,10 @@ import review_envelope  # resolved through the path set above
 
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 HUNK_HEADER = re.compile(r"^@@ -\d+(?:,\d+)? \+(?P<start>\d+)(?:,\d+)? @@")
-DEFAULT_MAX_CHARS = 120_000
+# One chunk holds a whole PR for minimax-m3.1-flash, whose input budget is
+# 900,000 tokens. At about 3 characters per token, 2,000,000 patch characters
+# use about 670,000 tokens. QUALITY.md and JSON escaping stay inside the rest.
+DEFAULT_MAX_CHARS = 2_000_000
 # Each chunk costs up to two model calls. Files in chunks past the limit become unreviewed.
 DEFAULT_MAX_CHUNKS = 20
 BINARY_NUMSTAT = b"-"

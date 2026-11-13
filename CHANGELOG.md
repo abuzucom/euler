@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.9.0] (2026-11-13)
+
+### Changed
+
+- Switched the quality review model to `minimax-m3.1-flash`. The foucault
+  security review already runs it, and its reports passed the format
+  validator on the first attempt.
+- Raised the per-call review budget in `ci/build_pr_case.py` from 120,000 to
+  2,000,000 patch characters. Most pull requests now take one model call, so
+  the reviewer sees every changed file together. Larger pull requests still
+  split into chunks.
+
 ## [0.8.7] (2026-11-13)
 
 ### Changed

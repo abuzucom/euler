@@ -132,6 +132,18 @@ class BuildTest(GitRepoCase):
         manifest = json.loads((self.build(base, head, max_chars=400) / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(len(manifest["chunks"]), 2)
 
+    def test_default_budget_reviews_a_large_pr_in_one_chunk(self) -> None:
+        patches = {f"file{index}.py": "+" + "x" * 499_999 for index in range(3)}
+        chunks, oversized = build_pr_case.pack_chunks(patches, build_pr_case.DEFAULT_MAX_CHARS)
+        self.assertEqual(chunks, [sorted(patches)])
+        self.assertEqual(oversized, [])
+
+    def test_default_budget_still_flags_a_patch_above_it(self) -> None:
+        patches = {"huge.py": "+" + "x" * 2_099_999}
+        chunks, oversized = build_pr_case.pack_chunks(patches, build_pr_case.DEFAULT_MAX_CHARS)
+        self.assertEqual(chunks, [])
+        self.assertEqual(oversized, ["huge.py"])
+
     def test_oversized_single_file_unreviewed(self) -> None:
         base = self.commit({"a.txt": "x\n"})
         head = self.commit({"huge.py": "C = 1\n" * 400})

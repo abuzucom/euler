@@ -32,7 +32,8 @@ a report with a machine-readable verdict. The check fails on `BLOCK` or
    fails before a model request when the key is empty.
 9. The reusable workflow allows one active review per pull request. A newer
    head cancels an obsolete run. The review job stops after 45 minutes. The
-   `max_chunks` input caps envelopes at 20 by default. The model step stops
+   `max_chunks` input caps envelopes at 20 by default. One envelope holds up
+   to 2,000,000 patch characters, so most pull requests take one model call. The model step stops
    after 40 minutes. A run without a verdict publishes a blocking check.
 10. The preparation job fetches the base commit by its full SHA. The
     same-repository path fetches the head commit by its full SHA. The fork
@@ -78,7 +79,7 @@ item in the `prescan` array of `VERDICT_JSON`.
 - A blocking prescan finding from Q11, M1, M12, or M13 forces BLOCK.
 - These files become unreviewed files:
   - a binary file
-  - a file over the chunk budget
+  - a file over the 2,000,000-character chunk budget
   - a file in a chunk past `--max-chunks`, 20 by default
   - a path that is not valid UTF-8
   - a text file with an empty patch
@@ -161,6 +162,10 @@ branch.
   runs a live review against the active provider.
 
 ## Provider changes
+
+The active profile runs Ollama with `minimax-m3.1-flash`. Its 900,000-token
+input budget sets the chunk budget in `ci/build_pr_case.py`. A model with a
+smaller context needs a smaller `DEFAULT_MAX_CHARS`.
 
 Edit `active_provider` in `ci/model_providers.json`. The adapter supports the
 `ollama`, `openai-compatible`, and `anthropic` protocols. A new endpoint needs
