@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.8.3] (2026-11-13)
+
+### Changed
+
+- Pin `actions/checkout` v7.0.1 and `actions/setup-python` v7.1.0 in the
+  immutable compliance workflow. The trusted compliance checker accepts the
+  same pins.
+- Pin `github/codeql-action` v4.39.3 in the CodeQL workflow.
+
 ## [0.8.2] (2026-11-13)
 
 ### Fixed
