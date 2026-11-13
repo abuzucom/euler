@@ -6,6 +6,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.8.2] (2026-11-13)
+
+### Fixed
+
+- Count added lines that start with `++` in the prescan line map. The case
+  builder treats `---` and `+++` as file headers only before the first hunk.
+- Report a non-string finding `class`, finding `file`, or prescan `id` as a
+  validation problem. The response validator no longer raises `TypeError` on
+  such model output.
+- Read the unreviewed files from the envelope metadata in the
+  `check_review_response.py` command line. The command line now rejects the
+  same APPROVE reports that the review runner rejects.
+- Match the expected eval verdict as a whole token on the final line. A
+  verdict named only in the justification no longer passes.
+- Report a non-array `findings` value in a live eval as a failure instead of
+  a crash.
+
+### Changed
+
+- Share one `load_model_call` between `ci/run_review.py` and
+  `eval/run_eval.py`. The review runner now validates the `module:function`
+  form. `run_eval.load_model_call` stays importable.
+- Name the required positional argument count in `call_model` and drop an
+  unreachable binary filter in the case builder.
+
 ## [0.8.1] (2026-11-13)
 
 ### Fixed

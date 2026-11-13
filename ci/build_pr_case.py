@@ -91,11 +91,17 @@ def parse_added_lines(patch: str) -> list[int]:
     """Return head line numbers of added lines in one file patch."""
     added = []
     line_number = 0
+    in_hunk = False
     for line in patch.splitlines():
         header = HUNK_HEADER.match(line)
         if header:
             line_number = int(header.group("start"))
-        elif line.startswith("+") and not line.startswith("+++"):
+            in_hunk = True
+        elif not in_hunk:
+            # The ---/+++ file headers precede the first hunk. Inside a hunk,
+            # an added line whose content starts with "++" is still content.
+            continue
+        elif line.startswith("+"):
             added.append(line_number)
             line_number += 1
         elif line.startswith(" "):
@@ -376,8 +382,7 @@ def build(options: BuildOptions) -> None:
     chunks, oversized = pack_chunks(patches, options.max_chars)
     chunks, overflow = limit_chunks(chunks, options.max_chunks)
     prescan, unparsed = build_prescan(options, changed, patches)
-    undecodable_text = [path for path in undecodable if path not in binary]
-    unreviewed = sorted(binary) + undecodable_text + empty + oversized + overflow + unparsed
+    unreviewed = sorted(binary) + undecodable + empty + oversized + overflow + unparsed
     envelopes_dir = options.out_dir / "envelopes"
     envelopes_dir.mkdir(parents=True, exist_ok=True)
     context = f"Title: {options.title}\n\n{options.body}"

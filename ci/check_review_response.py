@@ -48,9 +48,15 @@ def finding_problems(item: object, context: ReviewContext, classes: dict) -> lis
         return ["finding must be a JSON object"]
     problems = []
     class_id, severity = item.get("class"), item.get("severity")
-    policy_class = classes.get(class_id)
-    if policy_class is None:
-        problems.append(f"unknown class {class_id}")
+    # Model output is untrusted JSON. A list or object here is unhashable and
+    # would crash the dict lookup below instead of failing validation.
+    if not isinstance(class_id, str):
+        problems.append("finding class must be a string")
+        policy_class = None
+    else:
+        policy_class = classes.get(class_id)
+        if policy_class is None:
+            problems.append(f"unknown class {class_id}")
     if severity not in SEVERITIES:
         problems.append(f"finding severity must be one of {', '.join(SEVERITIES)}")
     elif policy_class and policy_class.tier == "Advisory" and severity != "LOW":
@@ -59,14 +65,21 @@ def finding_problems(item: object, context: ReviewContext, classes: dict) -> lis
         problems.append("finding confidence must be certain or likely")
     if not isinstance(item.get("line"), int):
         problems.append("finding line must be an integer")
-    if context.mode == "PR" and item.get("file") not in context.changed_files:
-        problems.append(f"finding cites {item.get('file')} outside the changed files")
+    cited_file = item.get("file")
+    if not isinstance(cited_file, str):
+        problems.append("finding file must be a string")
+    elif context.mode == "PR" and cited_file not in context.changed_files:
+        problems.append(f"finding cites {cited_file} outside the changed files")
     return problems
 
 
 def required_verdict(findings: list[dict], classes: dict) -> str:
     """Return the minimum verdict the tiers demand."""
-    tiers = [(classes[item["class"]].tier, item.get("severity")) for item in findings if item.get("class") in classes]
+    tiers = [
+        (classes[item["class"]].tier, item.get("severity"))
+        for item in findings
+        if isinstance(item.get("class"), str) and item["class"] in classes
+    ]
     if any(tier == "Blocking" or (tier == "Graded" and severity == "HIGH") for tier, severity in tiers):
         return "BLOCK"
     if any(tier == "Escalate" for tier, _ in tiers):
@@ -98,7 +111,12 @@ def prescan_problems(entries: object, context: ReviewContext) -> list[str]:
     resolved = set()
     problems = []
     for entry in entries:
-        if not isinstance(entry, dict) or entry.get("status") not in PRESCAN_STATUSES or not entry.get("reason"):
+        if (
+            not isinstance(entry, dict)
+            or not isinstance(entry.get("id"), str)
+            or entry.get("status") not in PRESCAN_STATUSES
+            or not entry.get("reason")
+        ):
             problems.append("prescan entries need an id, a confirmed or dismissed status, and a reason")
             continue
         resolved.add(entry.get("id"))
@@ -147,7 +165,10 @@ def main() -> int:
     parser.add_argument("--policy", type=Path, default=REPO_ROOT / "QUALITY.md")
     args = parser.parse_args()
     envelope = json.loads(args.envelope.read_text(encoding="utf-8"))
-    context = context_from_envelope(envelope, [])
+    # build_pr_case records the unreviewed files in each envelope. run_review
+    # passes the same list. The CLI and the pipeline enforce one rule.
+    unreviewed = envelope["TRUSTED_CONTEXT"].get("metadata", {}).get("unreviewed", [])
+    context = context_from_envelope(envelope, unreviewed)
     problems = validate(args.report.read_text(encoding="utf-8"), context, load_classes(args.policy))
     for problem in problems:
         sys.stderr.write(f"error: {problem}\n")

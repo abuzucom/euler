@@ -161,6 +161,12 @@ class RunReviewTest(unittest.TestCase):
         self.assertIn("... and 5 more", text)
         self.assertNotIn(unreviewed[-1], text)
 
+    def test_load_model_call_rejects_a_malformed_spec(self) -> None:
+        for spec in ("ci.call_model", ":call_model", "ci.call_model:"):
+            with self.assertRaises(ValueError) as context:
+                run_review.load_model_call(spec)
+            self.assertIn("module:function", str(context.exception))
+
     def test_gate(self) -> None:
         self.assertEqual(run_review.gate_status("BLOCK", True), 1)
         self.assertEqual(run_review.gate_status("NEEDS-HUMAN", True), 1)

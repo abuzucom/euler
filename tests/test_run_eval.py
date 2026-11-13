@@ -165,6 +165,37 @@ class LiveEvaluationTest(CaseFixture):
         response_with_status = "REVIEW STATUS: NEEDS-HUMAN - active review time limit reached.\n" + response
         self.assertEqual(run_eval.evaluate_response(case, response_with_status), [])
 
+    def test_verdict_named_only_in_justification_fails(self) -> None:
+        case_dir = self.write_case("ok-pr", self.valid_expected(expected_classes=[]), {"diff.patch": "+x\n"})
+        response = (
+            "VERDICT: APPROVE - no BLOCK finding.\n"
+            'VERDICT_JSON: {"schema_version":"1","mode":"PR","verdict":"APPROVE","findings":[],"prescan":[]}\n'
+        )
+        failures = run_eval.evaluate_response(run_eval.load_case(case_dir), response)
+        self.assertTrue(any("expected verdict 'BLOCK'" in item for item in failures))
+
+    def test_risk_verdict_requires_a_token_boundary(self) -> None:
+        expected = self.valid_expected(mode="File", expected_verdict="RISK: HIGH", expected_classes=[])
+        case = run_eval.load_case(self.write_case("risk-file", expected, {"input.py": "x = 1\n"}))
+        json_line = 'VERDICT_JSON: {"schema_version":"1","mode":"File","verdict":"HIGH","findings":[],"prescan":[]}\n'
+        self.assertEqual(run_eval.evaluate_response(case, "RISK: HIGH - unchecked divisor.\n" + json_line), [])
+        failures = run_eval.evaluate_response(case, "RISK: HIGHER - unchecked divisor.\n" + json_line)
+        self.assertTrue(any("expected verdict 'RISK: HIGH'" in item for item in failures))
+
+    def test_null_findings_reported_without_crash(self) -> None:
+        case_dir = self.write_case("ok-pr", self.valid_expected(), {"diff.patch": "+x\n"})
+        response = (
+            "VERDICT: BLOCK - M1 swallowed exception.\n"
+            'VERDICT_JSON: {"schema_version":"1","mode":"PR","verdict":"BLOCK","findings":null,"prescan":[]}\n'
+        )
+        failures = run_eval.evaluate_response(run_eval.load_case(case_dir), response)
+        self.assertIn("VERDICT_JSON findings must be an array", failures)
+
+    def test_model_call_loader_is_shared_with_the_review_runner(self) -> None:
+        from ci import run_review  # resolved through the path run_eval sets
+
+        self.assertIs(run_eval.load_model_call, run_review.load_model_call)
+
 
 if __name__ == "__main__":
     unittest.main()

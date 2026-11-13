@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+import review_envelope  # resolved through the path set above
 
 from ci import check_review_response as checker  # resolved through the path set above
 
@@ -98,6 +103,48 @@ class ValidateTest(unittest.TestCase):
     def test_unreviewed_files_forbid_approve(self) -> None:
         context = checker.ReviewContext("PR", {"app.py"}, set(), ["big.bin"])
         self.assertIn("unreviewed files forbid APPROVE", self.problems(build_report("APPROVE", []), context))
+
+    def test_non_string_class_rejected(self) -> None:
+        entry = finding("M1")
+        entry["class"] = ["M1"]
+        problems = self.problems(build_report("BLOCK", [entry], self.dismissed()))
+        self.assertIn("finding class must be a string", problems)
+
+    def test_non_string_file_rejected(self) -> None:
+        entry = finding("M1")
+        entry["file"] = ["app.py"]
+        problems = self.problems(build_report("BLOCK", [entry], self.dismissed()))
+        self.assertIn("finding file must be a string", problems)
+
+    def test_non_string_prescan_id_rejected(self) -> None:
+        prescan = [{"id": ["P1"], "status": "dismissed", "reason": "value clear from context"}]
+        problems = self.problems(build_report("APPROVE", [], prescan))
+        self.assertIn("prescan entries need an id, a confirmed or dismissed status, and a reason", problems)
+        self.assertIn("prescan item P1 lacks a resolution", problems)
+
+
+class CommandLineTest(unittest.TestCase):
+    def test_cli_reads_unreviewed_files_from_the_envelope(self) -> None:
+        metadata = {"chunk": "1/1", "changed_files": ["app.py", "big.bin"], "unreviewed": ["big.bin"]}
+        envelope = review_envelope.build_envelope("PR", {"app.py": "+x\n"}, "", [], metadata)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            report_path = Path(temp_dir) / "report.md"
+            envelope_path = Path(temp_dir) / "envelope.json"
+            report_path.write_text(build_report("APPROVE", []), encoding="utf-8")
+            envelope_path.write_text(envelope, encoding="utf-8")
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "ci" / "check_review_response.py"),
+                    str(report_path),
+                    str(envelope_path),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("unreviewed files forbid APPROVE", result.stderr)
 
 
 if __name__ == "__main__":
