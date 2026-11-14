@@ -14,7 +14,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import review_envelope  # resolved through the path set above
 
-from ci import run_review  # resolved through the path set above
+from ci import build_pr_case, run_review  # resolved through the path set above
 
 MIN_FENCE = 3
 
@@ -160,6 +160,18 @@ class RunReviewTest(unittest.TestCase):
         text = (self.review_dir / "report.md").read_text(encoding="utf-8")
         self.assertIn("... and 5 more", text)
         self.assertNotIn(unreviewed[-1], text)
+
+    def test_retry_note_stays_inside_its_reserve(self) -> None:
+        envelope_text = review_envelope.build_envelope("PR", {"app.py": "+x\n"}, "", [], {})
+        problems = ["\U0001f600" * (run_review.MAX_ITEM_CHARS * 2)] * (run_review.MAX_LISTED_ITEMS * 2)
+        retry_text = run_review.with_retry_note(envelope_text, problems)
+        added_bytes = len(retry_text.encode("utf-8")) - len(envelope_text.encode("utf-8"))
+        self.assertLessEqual(added_bytes, build_pr_case.RETRY_NOTE_TOKENS)
+
+    def test_retry_note_drops_control_characters(self) -> None:
+        envelope_text = review_envelope.build_envelope("PR", {"app.py": "+x\n"}, "", [], {})
+        retry = json.loads(run_review.with_retry_note(envelope_text, ["a\x01b"]))["TRUSTED_CONTEXT"]["RETRY"]
+        self.assertEqual(retry["problems"], ["a?b"])
 
     def test_load_model_call_rejects_a_malformed_spec(self) -> None:
         for spec in ("ci.call_model", ":call_model", "ci.call_model:"):

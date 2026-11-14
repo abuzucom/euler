@@ -4,7 +4,7 @@
     "ollama": {
       "protocol": "ollama",
       "endpoint": "https://ollama.com/api",
-      "model": "kimi-k2.7-code",
+      "model": "minimax-m3.1-flash",
       "max_output_tokens": 16384
     },
     "openai-compatible": {

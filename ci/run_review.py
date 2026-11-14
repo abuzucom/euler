@@ -63,12 +63,22 @@ def worst(verdicts: list[str]) -> str:
     return max(verdicts, key=VERDICT_RANK.__getitem__, default="APPROVE")
 
 
+def cap_items(items: list[str]) -> list[str]:
+    """Return at most MAX_LISTED_ITEMS items of MAX_ITEM_CHARS each, control characters replaced."""
+    # Replacing only control characters keeps each item on one line and keeps spaces in file names.
+    return [CONTROL_CHARS.sub("?", item)[:MAX_ITEM_CHARS] for item in items[:MAX_LISTED_ITEMS]]
+
+
 def with_retry_note(envelope_text: str, problems: list[str]) -> str:
-    """Return the envelope with a trusted note listing validation problems."""
+    """Return the envelope with a trusted note listing validation problems.
+
+    The caps keep the note inside RETRY_NOTE_TOKENS in ci/build_pr_case.py. Replacing control characters
+    keeps each item at most 4 UTF-8 bytes per character once escaped.
+    """
     envelope = json.loads(envelope_text)
     envelope["TRUSTED_CONTEXT"]["RETRY"] = {
         "note": "The previous report failed validation. Emit a corrected full report.",
-        "problems": problems,
+        "problems": cap_items(problems),
     }
     return json.dumps(envelope, indent=JSON_INDENT, ensure_ascii=False)
 
@@ -106,8 +116,7 @@ def fenced_list(items: list[str]) -> str:
     Paths, prescan messages, and validation problems carry pull request or model text. A fence keeps that
     text from rendering as markdown in the posted comment.
     """
-    # Replacing only control characters keeps each item on one line and keeps spaces in file names.
-    shown = [CONTROL_CHARS.sub("?", item)[:MAX_ITEM_CHARS] for item in items[:MAX_LISTED_ITEMS]]
+    shown = cap_items(items)
     if len(items) > MAX_LISTED_ITEMS:
         shown.append(f"... and {len(items) - MAX_LISTED_ITEMS} more")
     return fence("\n".join(shown))
