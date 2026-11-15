@@ -238,6 +238,7 @@ jobs:
           missing=0
           for script in \
             .foucault/ci/build_pr_case.py \
+            .foucault/ci/build_retry_case.py \
             .foucault/ci/run_model_command.py \
             .foucault/scripts/check_pr_review_response.py; do
             if [ ! -f "$script" ]; then
@@ -366,9 +367,16 @@ jobs:
           if [ "$status" -ne 0 ]; then
             exit "$status"
           fi
-          if ! python3 .foucault/scripts/check_pr_review_response.py response.txt > /dev/null; then
+          # The retry envelope carries the validator problems in trusted
+          # context. The builder passes only allowlisted validator messages.
+          # REVIEW_TARGET stays byte-identical.
+          if ! validation_error="$(
+            python3 .foucault/scripts/check_pr_review_response.py response.txt 2>&1 > /dev/null
+          )"; then
             echo "first response failed validation; one retry" >&2
-            python3 .foucault/ci/run_model_command.py "$MODEL_CALL_COMMAND" > response.txt
+            printf '%s\n' "$validation_error" > validation_error.txt
+            python3 .foucault/ci/build_retry_case.py case_text.txt validation_error.txt retry_case.txt
+            CASE_TEXT_FILE=retry_case.txt python3 .foucault/ci/run_model_command.py "$MODEL_CALL_COMMAND" > response.txt
           fi
 
       # Fixed text only. The report quotes nothing from the pull request. An

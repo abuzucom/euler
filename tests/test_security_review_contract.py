@@ -63,9 +63,9 @@ class SecurityReviewCallerTests(unittest.TestCase):
         self.assertRegex(self.caller, r"# Foucault v3\.\d+\.\d+\.")
 
     def test_pin_names_the_minimax_release(self) -> None:
-        # v3.7.12 is the first foucault release that reviews on minimax-m3.1-flash.
-        self.assertIn("# Foucault v3.7.12.", self.caller)
-        self.assertIn('FOUCAULT_REF: "770ecbb4c52e50c554214c68245e16832a70e0be"', self.caller)
+        # v3.8.1 reviews on minimax-m3.1-flash and retries with allowlisted validator problems.
+        self.assertIn("# Foucault v3.8.1.", self.caller)
+        self.assertIn('FOUCAULT_REF: "3ec8d0e332f4c778c66a6aed1b9b56a3be92e716"', self.caller)
 
     def test_review_and_fork_jobs_delegate_to_the_reusable(self) -> None:
         for job_name in ("review", "fork-review"):
@@ -301,6 +301,24 @@ class SecurityReviewReusableTests(unittest.TestCase):
             'python3 .foucault/ci/run_model_command.py "$MODEL_CALL_COMMAND"',
             adapter,
         )
+
+    def test_retry_runs_on_the_retry_case(self) -> None:
+        model = extract_step(self.reusable, "Run model call")
+        self.assertIn(
+            "python3 .foucault/ci/build_retry_case.py case_text.txt validation_error.txt retry_case.txt",
+            model,
+        )
+        self.assertIn(
+            'CASE_TEXT_FILE=retry_case.txt python3 .foucault/ci/run_model_command.py "$MODEL_CALL_COMMAND"',
+            model,
+        )
+        self.assertEqual(model.count("python3 .foucault/ci/run_model_command.py"), 2)
+        first_call = model.split("python3 .foucault/ci/run_model_command.py", 1)[0]
+        self.assertNotIn("retry_case.txt", first_call)
+
+    def test_pinned_script_check_covers_the_retry_builder(self) -> None:
+        scripts = extract_step(self.reusable, "Verify pinned review scripts")
+        self.assertIn(".foucault/ci/build_retry_case.py", scripts)
 
     def test_head_fetch_alone_receives_the_token(self) -> None:
         fetch = extract_step(self.reusable, "Fetch pull request objects")
