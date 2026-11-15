@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.9.1] (2026-11-15)
+
+### Changed
+
+- Updated the foucault integration pin to v3.8.1. The pinned adapter ships
+  one review profile on `minimax-m3.1-flash`.
+- Ported the upstream retry into `security-review.yml`. A response that
+  fails validation now retries on `retry_case.txt`. That envelope carries
+  the allowlisted validator problems in trusted context. The retry
+  previously resent the same envelope.
+- The pinned script check now covers `.foucault/ci/build_retry_case.py`.
+
 ## [0.9.0] (2026-11-13)
 
 ### Changed

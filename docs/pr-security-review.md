@@ -9,8 +9,8 @@ The two reviews publish separate check runs.
 
 ## Pin
 
-The workflow pins foucault v3.7.12 at commit
-`770ecbb4c52e50c554214c68245e16832a70e0be`. The workflow-level `FOUCAULT_REF`
+The workflow pins foucault v3.8.1 at commit
+`3ec8d0e332f4c778c66a6aed1b9b56a3be92e716`. The workflow-level `FOUCAULT_REF`
 variable holds the pin. The `resolve-pr` job republishes it as the `audit_ref`
 output for the reusable-workflow calls. The workflow loads `AUDIT.md` and the
 foucault adapter from that one commit. A verify step re-reads the checked-out
@@ -31,6 +31,9 @@ the pinned `.foucault/` checkout instead:
   `.foucault/`.
 - `.foucault/ci/call_model.py` reads `.foucault/ci/model_providers.json`.
 - `.foucault/scripts/check_pr_review_response.py` validates the report.
+- `.foucault/ci/build_retry_case.py` writes `retry_case.txt` after a failed
+  validation. The retry envelope adds the allowlisted validator problems to
+  trusted context. The one retry reads that envelope.
 
 The case builder diffs from the merge base. It needs the `AUDIT_PROMPT_FILE`
 environment variable and exits 3 when the diff exceeds review capacity. The
@@ -118,7 +121,7 @@ review when the first run already finished.
   wraps long expressions.
 - The compliance runner and `scripts/check_compliance_tree.py` trust
   `actions/checkout` v7.0.1 and `actions/setup-python` v7.1.0. Upstream
-  v3.7.12 still trusts checkout v4.4.0. A pin refresh keeps the euler pins.
+  v3.8.1 still trusts checkout v4.4.0. A pin refresh keeps the euler pins.
 - `scripts/check_compliance_tree.py` keeps the `process.stdout is None`
   guard that upstream dropped. mypy over `scripts/` types the stream as
   optional.
