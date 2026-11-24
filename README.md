@@ -1,5 +1,13 @@
 # euler
 
+> **Development moved to `abuzucom/agents-personas`.** This repository
+> receives no further changes. The euler persona lives in
+> [`reviewers/euler/`](https://github.com/abuzucom/agents-personas/tree/main/reviewers/euler) there. New callers
+> use [`.github/workflows/euler-quality-review.yml`](https://github.com/abuzucom/agents-personas/blob/main/.github/workflows/euler-quality-review.yml).
+> [`docs/migration.md`](https://github.com/abuzucom/agents-personas/blob/main/docs/migration.md) maps the inputs of
+> this repository's `quality-review.yml`. Existing pins keep working while this repository
+> stays available.
+
 Euler is a code quality and conventions review system for LLM-assisted software
 development. It applies explicit rules to pull requests, files, fragments, and
 whole codebases. It produces findings, evidence, and machine-readable verdicts.
