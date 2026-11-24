@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project follows Semantic Versioning. Pin a tag or commit SHA when
 loading `QUALITY.md` into a deployment.
 
+## [0.9.2] (2026-11-24)
+
+### Changed
+- Announce the move to `abuzucom/agents-personas` at the top of the
+  README. The euler persona continues there under `reviewers/euler/`.
+  This repository receives no further changes.
+
 ## [0.9.1] (2026-11-15)
 
 ### Changed
